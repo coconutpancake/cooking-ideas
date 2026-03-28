@@ -58,80 +58,124 @@
 - [x] 5.8 数据去重逻辑 ✅
 - [x] 5.9 temperature: 0.1 降温参数 ✅
 - [x] 5.10 System Role 严格约束 ✅
-- [x] 5.11 图片压缩质量提升（1024px, high） ✅
+- [x] 5.11 图片压缩质量提升（1024px） ✅
 - [x] 5.12 终端日志追踪（发送参数 + Raw Response） ✅
 
-### Phase 6: Firebase 后端集成
-- [ ] 6.1 Firebase Auth 认证流程
-- [ ] 6.2 Firestore 数据模型设计
-- [ ] 6.3 菜品 CRUD 接口
-- [ ] 6.4 收藏功能接口
-- [ ] 6.5 反馈提交接口
+### Phase 6: 菜谱推荐功能 ⭐新增
+- [x] 6.1 API Route `/api/recommend` ✅
+- [x] 6.2 预设 20 道家常菜谱数据库 ✅
+- [x] 6.3 食材匹配算法（支持别名匹配） ✅
+- [x] 6.4 匹配度计算 ✅
+- [x] 6.5 排序规则（完全匹配 > 高匹配度 > 少缺食材 > 快手） ✅
+- [x] 6.6 AI 辅助筛选（可选，无 API Key 时用本地算法） ✅
+- [x] 6.7 推荐列表页接入真实 API ✅
 
-### Phase 7: 状态管理与数据流
-- [x] 7.1 全局状态层设计 (Zustand stores)
-- [x] 7.2 数据获取层配置 (TanStack Query)
-- [x] 7.3 离线缓存策略 (LocalStorage)
-- [x] 7.4 useIngredients Hook ✅
+### Phase 7: Firebase 后端集成
+- [ ] 7.1 Firebase Auth 认证流程
+- [ ] 7.2 Firestore 数据模型设计
+- [ ] 7.3 菜品 CRUD 接口
+- [ ] 7.4 收藏功能接口
+- [ ] 7.5 反馈提交接口
 
-### Phase 8: 动画与交互优化
-- [ ] 8.1 页面切换动画
-- [ ] 8.2 列表加载动画
-- [ ] 8.3 交互反馈动画
-- [ ] 8.4 下拉刷新/上拉加载动画
+### Phase 8: 状态管理与数据流
+- [x] 8.1 全局状态层设计 (Zustand stores)
+- [x] 8.2 数据获取层配置 (TanStack Query)
+- [x] 8.3 离线缓存策略 (LocalStorage)
+- [x] 8.4 useIngredients Hook ✅
 
-### Phase 9: 测试与优化
-- [ ] 9.1 响应式布局测试
-- [ ] 9.2 性能优化 (Core Web Vitals)
-- [ ] 9.3 SEO 优化
-- [ ] 9.4 PWA 配置 (可选)
+### Phase 9: 动画与交互优化
+- [ ] 9.1 页面切换动画
+- [ ] 9.2 列表加载动画
+- [ ] 9.3 交互反馈动画
+- [ ] 9.4 下拉刷新/上拉加载动画
+
+### Phase 10: 测试与优化
+- [ ] 10.1 响应式布局测试
+- [ ] 10.2 性能优化 (Core Web Vitals)
+- [ ] 10.3 SEO 优化
+- [ ] 10.4 PWA 配置 (可选)
 
 ---
 
 ## 当前状态
 
 ### 项目进度
-- [x] Phase 1-4, 7 完成
-- [x] Phase 5 AI 视觉模型集成完成（阿里云通义千问）⭐
+- [x] Phase 1-4, 6, 8 完成
+- [x] Phase 5 AI 视觉模型集成完成 ⭐
+- [x] Phase 6 菜谱推荐功能完成 ⭐
 
 ### 新增文件
 ```
 src/
-├── app/api/vision/route.ts   # AI 视觉识别 API (通义千问)
+├── app/
+│   ├── api/
+│   │   ├── vision/route.ts    # AI 视觉识别 API
+│   │   └── recommend/route.ts # 菜谱推荐 API
+│   ├── recommend/page.tsx    # 推荐列表页（已接入真实 API）
+│   └── recipe/[id]/page.tsx  # 菜谱详情页
 ├── components/shared/
-│   └── ImageUploader.tsx     # 拍照/上传组件
+│   └── ImageUploader.tsx       # 拍照/上传组件
 ├── hooks/
-│   └── useIngredients.ts     # 食材状态 Hook
+│   └── useIngredients.ts       # 食材状态 Hook
 └── lib/
-    ├── imageUtils.ts         # 图片压缩/Base64 工具
-    ├── mockApi.ts            # API 调用（含兜底逻辑）
-    └── storage.ts            # LocalStorage 工具
-
-.env.local                    # 环境变量配置
+    ├── recommendApi.ts        # 推荐 API 调用
+    ├── recipes.ts            # 菜谱数据（含完整步骤和小贴士）
+    ├── imageUtils.ts           # 图片压缩工具
+    ├── mockApi.ts              # 视觉识别 API 调用
+    └── storage.ts             # LocalStorage 工具
 ```
 
-### AI 识别返回格式 (SDD 定义)
+### 推荐算法说明
+
+**输入**: 用户现有食材列表
+**输出**: 按匹配度排序的推荐菜谱列表
+
+**匹配度计算（仅基于主食材）**:
+- 匹配度 = 已匹配的主食材数 / 菜谱所需主食材总数
+- 调料（盐、油、酱油等常备品）不参与匹配度计算
+- 主食材100%匹配时视为"食材已备齐"
+
+**排序规则**:
+1. 完全匹配优先（主食材不缺）
+2. 匹配度高优先
+3. 缺少主食材少优先
+4. 烹饪时间短优先
+
+**食材匹配**: 支持别名（如"番茄"="西红柿"）
+
+### 菜谱数据模型
+```typescript
+interface Recipe {
+  id: string
+  title: string
+  mainIngredients: { name: string; amount?: string }[]  // 主食材
+  seasonings: { name: string; amount?: string }[]        // 调料与辅料
+}
+```
+
+### 推荐返回格式
 ```json
 {
   "success": true,
   "data": {
-    "ingredients": [
-      { "name": "西红柿", "amount": "2个" },
-      { "name": "鸡蛋", "amount": "3个" }
+    "recommendations": [
+      {
+        "recipeId": "1",
+        "title": "番茄炒蛋",
+        "coverImage": "https://...",
+        "cookingMethod": "炒",
+        "matchingScore": 1.0,
+        "availableMainIngredients": ["番茄", "鸡蛋"],
+        "missingMainIngredients": [],
+        "isAllAvailable": true,
+        "seasonings": ["葱", "盐", "油"],
+        "cookingTime": 15
+      }
     ],
-    "imageId": "img_123456",
-    "message": "成功识别出 2 种食材"
+    "totalCandidates": 20
   }
 }
 ```
-
-### 错误处理策略
-| 场景 | 处理方式 |
-|------|----------|
-| API Key 未配置 | 自动使用 Mock 数据 |
-| 网络超时 (30s) | 自动使用 Mock 数据 |
-| API 返回错误 | 自动使用 Mock 数据 |
-| 未识别到食材 | 提示用户重新上传 |
 
 ### 核心技术约定
 1. **目录结构**: Feature-based 结构 (`/features/[feature]`)
@@ -143,6 +187,11 @@ src/
 
 ### 遇到的问题
 - 无
+
+### 核心架构决策
+| 日期 | 决策内容 | 理由 |
+|------|----------|------|
+| 2026-03-28 | 主辅料分离：匹配度仅基于 mainIngredients 计算，调料（油盐酱醋等）不参与匹配 | 调料为常备品，每家都有，若参与计算会导致匹配度失真。分离后推荐更符合实际烹饪场景。 |
 
 ---
 
@@ -161,3 +210,7 @@ src/
 | 2026-03-28 | 优化 Prompt（解决 AI 幻觉），添加数据去重逻辑 |
 | 2026-03-28 | 降温 temperature: 0.1 + System Role + 图片质量提升到 1024px |
 | 2026-03-28 | 移除静默兜底，API 错误必须报错；添加终端日志追踪 |
+| 2026-03-28 | Git commit: 完成视觉大模型接入 |
+| 2026-03-28 | 完成菜谱推荐功能：API + 匹配算法 + 真实数据渲染 |
+| 2026-03-28 | 重构匹配算法：仅基于主食材计算匹配度，调料不参与计算 |
+| 2026-03-28 | 菜谱详情页：主食材和调料分为两栏独立展示 |

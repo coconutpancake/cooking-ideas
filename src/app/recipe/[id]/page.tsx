@@ -1,14 +1,33 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Share2, Heart, Clock, ChefHat, CheckCircle2, Circle } from "lucide-react"
+import { ArrowLeft, Share2, Heart, Clock, ChefHat, CheckCircle2, Circle, Flame } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
-import { mockRecipeDetail } from "@/lib/mockData"
+import { getRecipeById } from "@/lib/recipes"
 
 export default function RecipeDetailPage() {
   const router = useRouter()
-  const recipe = mockRecipeDetail
+  const params = useParams()
+  const recipeId = params.id as string
+  const recipe = getRecipeById(recipeId)
+
+  if (!recipe) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32">
+        <StatusBar />
+        <main className="max-w-lg mx-auto px-4 py-20 text-center">
+          <p className="text-zinc-500">菜谱不存在</p>
+          <Link
+            href="/recommend"
+            className="mt-4 inline-block px-6 py-2 bg-orange-500 text-white text-sm font-medium rounded-full"
+          >
+            返回推荐
+          </Link>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32">
@@ -70,16 +89,16 @@ export default function RecipeDetailPage() {
             食材清单
           </h2>
 
-          {/* Available Ingredients */}
-          <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-green-200 dark:border-green-900">
+          {/* Main Ingredients */}
+          <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-orange-200 dark:border-orange-900">
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
-              <span className="font-medium text-green-700 dark:text-green-400">
-                已备齐 ({recipe.availableIngredients.length})
+              <Flame size={18} className="text-orange-500" />
+              <span className="font-medium text-orange-600 dark:text-orange-400">
+                主食材 ({recipe.mainIngredients.length})
               </span>
             </div>
             <div className="space-y-2">
-              {recipe.availableIngredients.map((ing, i) => (
+              {recipe.mainIngredients.map((ing, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <span className="text-zinc-700 dark:text-zinc-300">{ing.name}</span>
                   <span className="text-sm text-zinc-400">{ing.amount}</span>
@@ -88,47 +107,47 @@ export default function RecipeDetailPage() {
             </div>
           </div>
 
-          {/* Missing Ingredients */}
-          {recipe.missingIngredients.length > 0 && (
-            <div className="bg-zinc-100 dark:bg-zinc-800/50 rounded-xl p-4 mt-3 border border-zinc-200 dark:border-zinc-700">
-              <div className="flex items-center gap-2 mb-3">
-                <Circle size={18} className="text-zinc-400" />
-                <span className="font-medium text-zinc-600 dark:text-zinc-400">
-                  暂缺 ({recipe.missingIngredients.length})
-                </span>
-              </div>
-              <div className="space-y-2">
-                {recipe.missingIngredients.map((ing, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-zinc-500 dark:text-zinc-400">{ing.name}</span>
-                    <span className="text-sm text-zinc-400">{ing.amount}</span>
-                  </div>
-                ))}
-              </div>
+          {/* Seasonings */}
+          <div className="bg-zinc-100 dark:bg-zinc-800/50 rounded-xl p-4 mt-3 border border-zinc-200 dark:border-zinc-700">
+            <div className="flex items-center gap-2 mb-3">
+              <Circle size={18} className="text-zinc-400" />
+              <span className="font-medium text-zinc-600 dark:text-zinc-400">
+                调料与辅料 ({recipe.seasonings.length})
+              </span>
             </div>
-          )}
+            <div className="space-y-2">
+              {recipe.seasonings.map((ing, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-zinc-500 dark:text-zinc-400">{ing.name}</span>
+                  <span className="text-sm text-zinc-400">{ing.amount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* Steps Section */}
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
-            做法步骤
-          </h2>
-          <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-zinc-100 dark:border-zinc-800 space-y-4">
-            {recipe.steps.map((step) => (
-              <div key={step.order} className="flex gap-4">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
-                    {step.order}
-                  </span>
+        {recipe.steps && (
+          <section>
+            <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
+              做法步骤
+            </h2>
+            <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-zinc-100 dark:border-zinc-800 space-y-4">
+              {recipe.steps.map((step) => (
+                <div key={step.order} className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
+                      {step.order}
+                    </span>
+                  </div>
+                  <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed pt-1">
+                    {step.description}
+                  </p>
                 </div>
-                <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed pt-1">
-                  {step.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Tips Section */}
         {recipe.tips && (
