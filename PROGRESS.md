@@ -24,7 +24,7 @@
 ### Phase 2: 通用组件开发
 - [x] 2.1 底部导航栏组件 (BottomNav)
 - [x] 2.2 顶部状态栏组件 (StatusBar)
-- [x] 2.3 图片上传组件 (ImageUploader) ⭐新增
+- [x] 2.3 图片上传组件 (ImageUploader) ⭐
 - [ ] 2.4 菜谱卡片组件 (RecipeCard)
 - [ ] 2.5 分类筛选组件 (CategoryFilter)
 - [ ] 2.6 搜索栏组件 (SearchBar)
@@ -43,66 +43,89 @@
 ### Phase 4: 核心功能开发 ⭐
 - [x] 4.1 图片上传/拍照功能 ✅
 - [x] 4.2 图片压缩与 Base64 转换 ✅
-- [x] 4.3 Mock API 食材识别 ✅
-- [x] 4.4 LocalStorage 食材持久化 ✅
-- [x] 4.5 首页冰箱实时读取 localStorage ✅
-- [x] 4.6 食材删除功能 ✅
+- [x] 4.3 LocalStorage 食材持久化 ✅
+- [x] 4.4 首页冰箱实时读取 localStorage ✅
+- [x] 4.5 食材删除功能 ✅
 
-### Phase 5: Firebase 后端集成
-- [ ] 5.1 Firebase Auth 认证流程
-- [ ] 5.2 Firestore 数据模型设计
-- [ ] 5.3 菜品 CRUD 接口
-- [ ] 5.4 收藏功能接口
-- [ ] 5.5 反馈提交接口
+### Phase 5: AI 视觉模型集成 ⭐新增
+- [x] 5.1 API Route `/api/vision` ✅
+- [x] 5.2 OpenAI GPT-4 Vision 支持 ✅
+- [x] 5.3 Claude Vision 备选支持 ✅
+- [x] 5.4 兜底 Mock 响应（API 不可用时） ✅
+- [x] 5.5 请求超时处理（30秒） ✅
+- [x] 5.6 错误处理与友好提示 ✅
 
-### Phase 6: 状态管理与数据流
-- [x] 6.1 全局状态层设计 (Zustand stores)
-- [x] 6.2 数据获取层配置 (TanStack Query)
-- [x] 6.3 离线缓存策略 (LocalStorage)
-- [x] 6.4 useIngredients Hook ✅
+### Phase 6: Firebase 后端集成
+- [ ] 6.1 Firebase Auth 认证流程
+- [ ] 6.2 Firestore 数据模型设计
+- [ ] 6.3 菜品 CRUD 接口
+- [ ] 6.4 收藏功能接口
+- [ ] 6.5 反馈提交接口
 
-### Phase 7: 动画与交互优化
-- [ ] 7.1 页面切换动画
-- [ ] 7.2 列表加载动画
-- [ ] 7.3 交互反馈动画
-- [ ] 7.4 下拉刷新/上拉加载动画
+### Phase 7: 状态管理与数据流
+- [x] 7.1 全局状态层设计 (Zustand stores)
+- [x] 7.2 数据获取层配置 (TanStack Query)
+- [x] 7.3 离线缓存策略 (LocalStorage)
+- [x] 7.4 useIngredients Hook ✅
 
-### Phase 8: 测试与优化
-- [ ] 8.1 响应式布局测试
-- [ ] 8.2 性能优化 (Core Web Vitals)
-- [ ] 8.3 SEO 优化
-- [ ] 8.4 PWA 配置 (可选)
+### Phase 8: 动画与交互优化
+- [ ] 8.1 页面切换动画
+- [ ] 8.2 列表加载动画
+- [ ] 8.3 交互反馈动画
+- [ ] 8.4 下拉刷新/上拉加载动画
+
+### Phase 9: 测试与优化
+- [ ] 9.1 响应式布局测试
+- [ ] 9.2 性能优化 (Core Web Vitals)
+- [ ] 9.3 SEO 优化
+- [ ] 9.4 PWA 配置 (可选)
 
 ---
 
 ## 当前状态
 
 ### 项目进度
-- [x] Phase 1 基础架构完成
-- [x] Phase 2 共享组件完成 (BottomNav, StatusBar, ImageUploader)
-- [x] Phase 3 核心页面完成
-- [x] Phase 4 核心功能完成 ⭐
+- [x] Phase 1-4, 7 完成
+- [x] Phase 5 AI 视觉模型集成完成 ⭐
 
 ### 新增文件
 ```
 src/
+├── app/api/vision/route.ts   # AI 视觉识别 API
 ├── components/shared/
-│   └── ImageUploader.tsx   # 拍照/上传组件
+│   └── ImageUploader.tsx     # 拍照/上传组件
 ├── hooks/
-│   └── useIngredients.ts   # 食材状态 Hook
+│   └── useIngredients.ts     # 食材状态 Hook
 └── lib/
-    ├── imageUtils.ts       # 图片压缩/Base64 工具
-    ├── storage.ts          # LocalStorage 工具
-    └── mockApi.ts          # Mock API (食材识别)
+    ├── imageUtils.ts         # 图片压缩/Base64 工具
+    ├── mockApi.ts            # API 调用（含兜底逻辑）
+    └── storage.ts            # LocalStorage 工具
+
+.env.local                    # 环境变量配置
 ```
 
-### 功能说明
-1. **拍照/上传**: 移动端调用摄像头，电脑端上传文件
-2. **图片处理**: 压缩到 800px，转换为 Base64
-3. **Mock API**: 模拟识别，返回 3-6 种随机食材
-4. **LocalStorage**: 食材数据持久化
-5. **实时更新**: 首页冰箱区域监听 localStorage 变化
-6. **删除食材**: 点击标签上的 X 按钮删除
+### AI 识别返回格式 (SDD 定义)
+```json
+{
+  "success": true,
+  "data": {
+    "ingredients": [
+      { "name": "西红柿", "amount": "2个" },
+      { "name": "鸡蛋", "amount": "3个" }
+    ],
+    "imageId": "img_123456",
+    "message": "成功识别出 2 种食材"
+  }
+}
+```
+
+### 错误处理策略
+| 场景 | 处理方式 |
+|------|----------|
+| API Key 未配置 | 自动使用 Mock 数据 |
+| 网络超时 (30s) | 自动使用 Mock 数据 |
+| API 返回错误 | 自动使用 Mock 数据 |
+| 未识别到食材 | 提示用户重新上传 |
 
 ### 核心技术约定
 1. **目录结构**: Feature-based 结构 (`/features/[feature]`)
@@ -125,3 +148,5 @@ src/
 | 2026-03-28 | 完成 3 个核心页面开发：首页/推荐列表/菜谱详情 |
 | 2026-03-28 | Git commit: 完成静态UI |
 | 2026-03-28 | 完成核心功能：拍照上传/Base64/Mock API/localStorage |
+| 2026-03-28 | Git commit: 完成拍照和本地存储 |
+| 2026-03-28 | 完成 AI 视觉模型集成 (GPT-4 Vision/Claude Vision) |

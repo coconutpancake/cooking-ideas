@@ -7,14 +7,15 @@ import { BottomNav } from "@/components/shared/BottomNav"
 import { ImageUploader } from "@/components/shared/ImageUploader"
 import { useIngredients } from "@/hooks/useIngredients"
 import { cn } from "@/lib/utils"
+import type { IngredientItem } from "@/lib/mockApi"
 
 export default function HomePage() {
   const { ingredients, isLoading, add, remove, refresh } = useIngredients()
   const [isFridgeExpanded, setIsFridgeExpanded] = useState(true)
   const [showUploadTip, setShowUploadTip] = useState(false)
-  const [lastIdentified, setLastIdentified] = useState<string[] | null>(null)
+  const [lastIdentified, setLastIdentified] = useState<IngredientItem[] | null>(null)
 
-  const handleIngredientsIdentified = (newIngredients: string[]) => {
+  const handleIngredientsIdentified = (newIngredients: IngredientItem[]) => {
     setLastIdentified(newIngredients)
     setShowUploadTip(true)
     // 3秒后隐藏提示
@@ -49,7 +50,7 @@ export default function HomePage() {
           {showUploadTip && lastIdentified && (
             <div className="mt-4 px-4 py-3 bg-green-50 dark:bg-green-900/20 rounded-xl animate-pulse">
               <p className="text-sm text-green-700 dark:text-green-400">
-                ✓ 已添加：{lastIdentified.join("、")}
+                ✓ 已添加：{lastIdentified.map(i => i.name).join("、")}
               </p>
             </div>
           )}
