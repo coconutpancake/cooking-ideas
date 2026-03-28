@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Search, SlidersHorizontal, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
-import { BottomNav } from "@/components/shared/BottomNav"
 import { getRecommendations, type Recommendation } from "@/lib/recommendApi"
 import { getIngredients } from "@/lib/storage"
 import { cn } from "@/lib/utils"
@@ -246,8 +245,6 @@ export default function RecommendPage() {
           )}
         </div>
       </main>
-
-      <BottomNav />
     </div>
   )
 }

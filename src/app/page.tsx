@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { ChevronDown, ChevronUp, X, Plus, Sparkles, RefreshCw } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
-import { BottomNav } from "@/components/shared/BottomNav"
 import { ImageUploader } from "@/components/shared/ImageUploader"
 import { useIngredients } from "@/hooks/useIngredients"
 import { cn } from "@/lib/utils"
@@ -170,8 +169,6 @@ export default function HomePage() {
           </div>
         </section>
       </main>
-
-      <BottomNav />
     </div>
   )
 }
