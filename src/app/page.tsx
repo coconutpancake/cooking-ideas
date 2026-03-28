@@ -59,9 +59,9 @@ export default function HomePage() {
         <section className="px-4">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-800 overflow-hidden">
             {/* Header */}
-            <button
+            <div
               onClick={() => setIsFridgeExpanded(!isFridgeExpanded)}
-              className="w-full flex items-center justify-between p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              className="w-full flex items-center justify-between p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <span className="text-xl">🧊</span>
@@ -73,22 +73,22 @@ export default function HomePage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <div
                   onClick={(e) => {
                     e.stopPropagation()
                     refresh()
                   }}
-                  className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                  className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
                 >
                   <RefreshCw size={16} className="text-zinc-400" />
-                </button>
+                </div>
                 {isFridgeExpanded ? (
                   <ChevronUp size={20} className="text-zinc-400" />
                 ) : (
                   <ChevronDown size={20} className="text-zinc-400" />
                 )}
               </div>
-            </button>
+            </div>
 
             {/* Ingredients Tags */}
             {isFridgeExpanded && (
@@ -104,18 +104,18 @@ export default function HomePage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {ingredients.map((item) => (
-                      <span
+                      <div
                         key={item.id}
                         className="inline-flex items-center gap-1 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm rounded-full group hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
                       >
                         {item.name}
-                        <button
+                        <div
                           onClick={() => remove(item.id)}
-                          className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-800"
+                          className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-800 cursor-pointer"
                         >
                           <X size={12} className="text-zinc-500 dark:text-zinc-400" />
-                        </button>
-                      </span>
+                        </div>
+                      </div>
                     ))}
 
                     {/* Add button */}
