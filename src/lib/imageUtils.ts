@@ -1,6 +1,6 @@
 /**
  * 图片压缩工具
- * 将图片压缩到指定宽度，保持比例
+ * 将图片压缩到指定尺寸，保持比例
  */
 
 export interface CompressedImage {
@@ -14,13 +14,13 @@ export interface CompressedImage {
 /**
  * 压缩图片并转换为 Base64
  * @param file 图片文件
- * @param maxWidth 最大宽度，默认 800
- * @param quality 压缩质量 0-1，默认 0.8
+ * @param maxLongestEdge 最大边长，默认 1024（保证清晰度）
+ * @param quality 压缩质量 0-1，默认 0.85
  */
 export function compressImage(
   file: File,
-  maxWidth: number = 800,
-  quality: number = 0.8
+  maxLongestEdge: number = 1024,
+  quality: number = 0.85
 ): Promise<CompressedImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -30,10 +30,15 @@ export function compressImage(
         const canvas = document.createElement("canvas")
         let { width, height } = img
 
-        // 计算缩放比例
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width
-          width = maxWidth
+        // 计算缩放比例 - 确保最长边不超过 maxLongestEdge
+        if (width > maxLongestEdge || height > maxLongestEdge) {
+          if (width > height) {
+            height = Math.round((height * maxLongestEdge) / width)
+            width = maxLongestEdge
+          } else {
+            width = Math.round((width * maxLongestEdge) / height)
+            height = maxLongestEdge
+          }
         }
 
         canvas.width = width
@@ -45,9 +50,12 @@ export function compressImage(
           return
         }
 
+        // 使用高质量渲染
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = "high"
         ctx.drawImage(img, 0, 0, width, height)
 
-        // 转换为 Base64
+        // 转换为 Base64 (JPEG)
         const base64 = canvas.toDataURL("image/jpeg", quality)
         const compressedSize = Math.round((base64.length - base64.indexOf(",") - 1) * 0.75)
 

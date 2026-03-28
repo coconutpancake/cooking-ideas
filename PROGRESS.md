@@ -47,13 +47,19 @@
 - [x] 4.4 首页冰箱实时读取 localStorage ✅
 - [x] 4.5 食材删除功能 ✅
 
-### Phase 5: AI 视觉模型集成 ⭐新增
+### Phase 5: AI 视觉模型集成 ⭐ (阿里云通义千问)
 - [x] 5.1 API Route `/api/vision` ✅
-- [x] 5.2 OpenAI GPT-4 Vision 支持 ✅
-- [x] 5.3 Claude Vision 备选支持 ✅
-- [x] 5.4 兜底 Mock 响应（API 不可用时） ✅
+- [x] 5.2 阿里云通义千问 (qwen-vl-plus) ✅
+- [x] 5.3 OpenAI SDK 兼容模式 ✅
+- [x] 5.4 彻底移除静默兜底，假数据不再传到前端 ✅
 - [x] 5.5 请求超时处理（30秒） ✅
 - [x] 5.6 错误处理与友好提示 ✅
+- [x] 5.7 Prompt 优化（解决 AI 幻觉） ✅
+- [x] 5.8 数据去重逻辑 ✅
+- [x] 5.9 temperature: 0.1 降温参数 ✅
+- [x] 5.10 System Role 严格约束 ✅
+- [x] 5.11 图片压缩质量提升（1024px, high） ✅
+- [x] 5.12 终端日志追踪（发送参数 + Raw Response） ✅
 
 ### Phase 6: Firebase 后端集成
 - [ ] 6.1 Firebase Auth 认证流程
@@ -86,12 +92,12 @@
 
 ### 项目进度
 - [x] Phase 1-4, 7 完成
-- [x] Phase 5 AI 视觉模型集成完成 ⭐
+- [x] Phase 5 AI 视觉模型集成完成（阿里云通义千问）⭐
 
 ### 新增文件
 ```
 src/
-├── app/api/vision/route.ts   # AI 视觉识别 API
+├── app/api/vision/route.ts   # AI 视觉识别 API (通义千问)
 ├── components/shared/
 │   └── ImageUploader.tsx     # 拍照/上传组件
 ├── hooks/
@@ -133,6 +139,7 @@ src/
 3. **状态管理**: Zustand (UI状态) + TanStack Query (服务端状态)
 4. **样式方案**: Tailwind CSS + CSS 变量系统
 5. **移动端优化**: safe-area-pb, 最小点击区域 44px
+6. **AI 模型**: 阿里云通义千问 (qwen-vl-plus)，OpenAI SDK 兼容模式
 
 ### 遇到的问题
 - 无
@@ -150,3 +157,7 @@ src/
 | 2026-03-28 | 完成核心功能：拍照上传/Base64/Mock API/localStorage |
 | 2026-03-28 | Git commit: 完成拍照和本地存储 |
 | 2026-03-28 | 完成 AI 视觉模型集成 (GPT-4 Vision/Claude Vision) |
+| 2026-03-28 | 切换为阿里云通义千问，OpenAI SDK 兼容模式 |
+| 2026-03-28 | 优化 Prompt（解决 AI 幻觉），添加数据去重逻辑 |
+| 2026-03-28 | 降温 temperature: 0.1 + System Role + 图片质量提升到 1024px |
+| 2026-03-28 | 移除静默兜底，API 错误必须报错；添加终端日志追踪 |

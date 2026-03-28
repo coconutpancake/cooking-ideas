@@ -1,6 +1,6 @@
 /**
  * 图片识别 API
- * 调用后端 /api/vision 接口，失败时兜底使用 Mock 数据
+ * 调用后端 /api/vision 接口
  */
 
 export interface IngredientItem {
@@ -10,27 +10,13 @@ export interface IngredientItem {
 
 export interface IdentifyResponse {
   success: boolean
-  data: {
+  data?: {
     ingredients: IngredientItem[]
     imageId: string
     message: string
   }
   error?: string
-}
-
-/**
- * 兜底 Mock 数据（API 不可用时使用）
- */
-function getFallbackIngredients(): IngredientItem[] {
-  const possibleIngredients = [
-    "西红柿", "鸡蛋", "葱", "蒜", "姜", "青菜", "白菜",
-    "土豆", "胡萝卜", "洋葱", "豆腐", "肉末", "辣椒",
-    "盐", "油", "生抽", "老抽", "糖", "醋", "番茄酱",
-  ]
-
-  const count = Math.floor(Math.random() * 4) + 3
-  const shuffled = [...possibleIngredients].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, count).map((name) => ({ name, amount: "适量" }))
+  isMock?: boolean
 }
 
 /**
@@ -44,7 +30,7 @@ export async function identifyIngredients(
 ): Promise<IdentifyResponse> {
   // 创建超时 Promise
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error("请求超时，请重试")), timeout)
+    setTimeout(() => reject(new Error("请求超时，请检查网络连接")), timeout)
   })
 
   // 创建实际请求 Promise
@@ -56,29 +42,38 @@ export async function identifyIngredients(
     body: JSON.stringify({ image: base64Image }),
   })
 
+  let response: Response
+
   try {
     // 竞态：要么完成请求，要么超时
-    const response = await Promise.race([fetchPromise, timeoutPromise])
-
-    if (!response.ok) {
-      throw new Error(`HTTP error: ${response.status}`)
-    }
-
-    const data: IdentifyResponse = await response.json()
-    return data
+    response = await Promise.race([fetchPromise, timeoutPromise])
   } catch (error) {
-    console.error("[identifyIngredients] API 调用失败:", error)
-
-    // 兜底策略：返回 Mock 数据
-    return {
-      success: true,
-      data: {
-        ingredients: getFallbackIngredients(),
-        imageId: `fallback_${Date.now()}`,
-        message: "网络不稳定，返回本地数据",
-      },
-    }
+    console.error("[identifyIngredients] ❌ 请求失败:", error)
+    throw new Error(`网络请求失败: ${error instanceof Error ? error.message : "未知错误"}`)
   }
+
+  if (!response.ok) {
+    const errorText = `HTTP ${response.status}: ${response.statusText}`
+    console.error("[identifyIngredients] ❌ HTTP 错误:", errorText)
+    throw new Error(`请求失败: ${errorText}`)
+  }
+
+  const data: IdentifyResponse = await response.json()
+
+  // 检查后端返回的错误
+  if (!data.success) {
+    console.error("[identifyIngredients] ❌ 识别失败:", data.error)
+    throw new Error(data.error || "食材识别失败")
+  }
+
+  // 检查是否为空结果
+  if (!data.data || data.data.ingredients.length === 0) {
+    console.warn("[identifyIngredients] ⚠️ 未识别出任何食材")
+    throw new Error("未能在图片中识别出食材，请上传包含清晰食材的图片")
+  }
+
+  console.log("[identifyIngredients] ✅ 识别成功:", data.data.ingredients)
+  return data
 }
 
 /**

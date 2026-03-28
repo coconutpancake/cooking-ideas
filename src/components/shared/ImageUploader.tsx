@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { Camera, Upload, X, Loader2 } from "lucide-react"
+import { Camera, Upload, X, Loader2, AlertCircle } from "lucide-react"
 import { compressImage, isMobileDevice } from "@/lib/imageUtils"
 import { identifyIngredients, type IngredientItem } from "@/lib/mockApi"
 import { addIngredient } from "@/lib/storage"
@@ -18,7 +18,6 @@ export function ImageUploader({ onIngredientsIdentified, className }: ImageUploa
   const [isProcessing, setIsProcessing] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isFallback, setIsFallback] = useState(false)
 
   const mobile = isMobileDevice()
 
@@ -26,29 +25,37 @@ export function ImageUploader({ onIngredientsIdentified, className }: ImageUploa
     setIsProcessing(true)
     setError(null)
     setPreview(null)
-    setIsFallback(false)
 
     try {
-      // 压缩图片
-      const compressed = await compressImage(file, 800, 0.8)
+      // 压缩图片（最长边 1024px）
+      console.log("[ImageUploader] 开始压缩图片...")
+      const compressed = await compressImage(file, 1024, 0.85)
+      console.log("[ImageUploader] 图片压缩完成:", compressed.width, "x", compressed.height, "原始:", compressed.originalSize, "压缩后:", compressed.compressedSize)
       setPreview(compressed.base64)
 
       // 调用 API 识别食材
+      console.log("[ImageUploader] 开始调用识别 API...")
       const response = await identifyIngredients(compressed.base64)
 
-      if (response.success && response.data.ingredients.length > 0) {
+      if (response.success && response.data && response.data.ingredients.length > 0) {
+        console.log("[ImageUploader] ✅ 识别成功，食材:", response.data.ingredients)
+
         // 添加识别出的食材到 localStorage
+        let addedCount = 0
         response.data.ingredients.forEach((item) => {
-          addIngredient(item.name)
+          const result = addIngredient(item.name)
+          if (result) addedCount++
         })
-        setIsFallback(!!response.data.message.includes("本地数据"))
-        // 回调通知
+
+        console.log("[ImageUploader] 添加了", addedCount, "种新食材到冰箱")
         onIngredientsIdentified?.(response.data.ingredients)
-      } else if (response.success && response.data.ingredients.length === 0) {
-        setError("未能识别出食材，请上传包含食材的图片")
+      } else {
+        console.warn("[ImageUploader] ⚠️ 未识别出食材")
+        setError("未能在图片中识别出食材，请上传包含清晰食材的图片")
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "图片处理失败")
+      console.error("[ImageUploader] ❌ 处理失败:", err)
+      setError(err instanceof Error ? err.message : "图片处理失败，请重试")
     } finally {
       setIsProcessing(false)
     }
@@ -74,7 +81,6 @@ export function ImageUploader({ onIngredientsIdentified, className }: ImageUploa
   const clearPreview = () => {
     setPreview(null)
     setError(null)
-    setIsFallback(false)
   }
 
   return (
@@ -121,17 +127,11 @@ export function ImageUploader({ onIngredientsIdentified, className }: ImageUploa
         </div>
       )}
 
-      {/* Fallback Tip */}
-      {isFallback && !isProcessing && (
-        <div className="mb-4 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm rounded-lg">
-          网络不稳定，已使用本地数据
-        </div>
-      )}
-
       {/* Error State */}
-      {error && !isFallback && (
-        <div className="mb-4 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg">
-          {error}
+      {error && !isProcessing && (
+        <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-2">
+          <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
 

@@ -32,13 +32,21 @@ export function saveIngredients(ingredients: StoredIngredient[]): void {
 }
 
 /**
- * 添加食材
+ * 添加食材（去重）
+ * @returns 新食材，或 null（如果已存在）
  */
-export function addIngredient(name: string): StoredIngredient {
+export function addIngredient(name: string): StoredIngredient | null {
   const ingredients = getIngredients()
+  const trimmedName = name.trim()
+
+  // 检查是否已存在同名食材
+  if (ingredients.some((i) => i.name === trimmedName)) {
+    return null
+  }
+
   const newIngredient: StoredIngredient = {
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    name: name.trim(),
+    name: trimmedName,
     addedAt: Date.now(),
   }
   ingredients.push(newIngredient)
