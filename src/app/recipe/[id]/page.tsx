@@ -16,7 +16,7 @@ interface StreamMessage {
   type: "chunk" | "steps" | "done"
   content?: string
   steps?: Step[]
-  raw?: string
+  fullText?: string
 }
 
 export default function RecipeDetailPage() {
@@ -38,7 +38,8 @@ export default function RecipeDetailPage() {
   // 流式步骤状态
   const [streamingSteps, setStreamingSteps] = useState<Step[]>([])
   const [displayedText, setDisplayedText] = useState("")
-  const [isStreaming, setIsStreaming] = useState(true)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [isLoadingApi, setIsLoadingApi] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
 
   // 用于打字机效果的 ref
@@ -96,11 +97,10 @@ export default function RecipeDetailPage() {
     if (!recipeName) return
 
     let cancelled = false
-    const controller = new AbortController()
+    let timeoutId: NodeJS.Timeout | null = null
 
     const fetchSteps = async () => {
       try {
-        setIsStreaming(true)
         setStreamError(null)
         textBufferRef.current = ""
         fullStepsRef.current = []
@@ -108,24 +108,41 @@ export default function RecipeDetailPage() {
 
         // 如果有本地步骤，直接使用
         if (recipe?.steps && recipe.steps.length > 0) {
+          console.log("[RecipeDetail] 使用本地步骤:", recipe.steps.length)
           const text = recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n")
           textBufferRef.current = text
           fullStepsRef.current = recipe.steps
+          const localSteps = recipe.steps
 
           // 打字机效果
           for (let i = 0; i <= text.length && !cancelled; i++) {
             await new Promise((r) => setTimeout(r, 15))
-            setDisplayedText(text.slice(0, i))
+            if (!cancelled) {
+              setDisplayedText(text.slice(0, i))
+            }
           }
 
-          if (!cancelled) {
-            setStreamingSteps(recipe.steps)
-            setIsStreaming(false)
-          }
+          // 无论是否被取消，都设置步骤（本地数据已经获取，不存在内存泄漏）
+          setStreamingSteps(localSteps)
+          setIsStreaming(false)
           return
         }
 
         // 调用流式 API
+        setIsLoadingApi(true)
+        setIsStreaming(true)
+        console.log("[RecipeDetail] 开始请求 /api/detail，recipeName:", recipeName)
+
+        // 设置 45 秒超时
+        timeoutId = setTimeout(() => {
+          if (!cancelled) {
+            console.error("[RecipeDetail] 请求超时")
+            setStreamError("生成超时，请检查网络后重试")
+            setIsStreaming(false)
+            setIsLoadingApi(false)
+          }
+        }, 45000)
+
         const response = await fetch("/api/detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -134,8 +151,9 @@ export default function RecipeDetailPage() {
             mainIngredients: recipe?.mainIngredients.map((i) => i.name) || [],
             availableIngredients,
           }),
-          signal: controller.signal,
         })
+
+        clearTimeout(timeoutId || undefined)
 
         if (!response.ok) {
           throw new Error(`请求失败: ${response.status}`)
@@ -147,47 +165,66 @@ export default function RecipeDetailPage() {
         const decoder = new TextDecoder()
         let buffer = ""
 
+        console.log("[RecipeDetail] 开始读取流...")
+
         while (!cancelled) {
           const { done, value } = await reader.read()
-          if (done) break
+
+          if (done) {
+            console.log("[RecipeDetail] 流读取完成，buffer:", buffer.slice(0, 100))
+            break
+          }
 
           const chunk = decoder.decode(value, { stream: true })
+          console.log("[RecipeDetail] 收到 chunk:", chunk.slice(0, 80))
           buffer += chunk
 
-          // 解析 SSE 格式: data: {...}\n\n
-          const lines = buffer.split("\n")
-          buffer = lines.pop() || ""
+          // 解析 SSE：找到所有完整的 "data: {...}\n\n" 消息
+          // 使用正则匹配：data: 开头，遇到 \n\n 或字符串结束
+          const sseRegex = /data: (.+?)(?=\n\n|$)/g
+          let match
+          let lastIndex = 0
 
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue
-
+          while ((match = sseRegex.exec(buffer)) !== null) {
+            lastIndex = match.index + match[0].length
             try {
-              const msg: StreamMessage = JSON.parse(line.slice(6))
+              const msg: StreamMessage = JSON.parse(match[1])
+              console.log("[RecipeDetail] 解析消息:", msg.type)
 
-              if (msg.type === "chunk" && msg.content) {
-                // 增量文本打字机效果
+              if (msg.type === "chunk" && msg.content !== undefined) {
                 textBufferRef.current += msg.content
-                const newText = textBufferRef.current
-                // 限制更新频率
-                if (newText.length - textIndexRef.current > 5) {
-                  setDisplayedText(newText)
-                  textIndexRef.current = newText.length
-                }
+                setDisplayedText(textBufferRef.current)
               } else if (msg.type === "done" && msg.steps) {
+                console.log("[RecipeDetail] 收到 done，步骤数:", msg.steps.length)
                 fullStepsRef.current = msg.steps
                 setStreamingSteps(msg.steps)
-                setDisplayedText(textBufferRef.current)
+                setDisplayedText(msg.fullText || textBufferRef.current)
+                setIsStreaming(false)
+                setIsLoadingApi(false)
+              } else if (msg.type === "steps" && msg.steps) {
+                // 中间步骤（部分完成）
+                fullStepsRef.current = msg.steps
               }
-            } catch {
-              // 忽略解析错误
+            } catch (parseError) {
+              console.warn("[RecipeDetail] 解析失败:", match[1].slice(0, 50))
             }
           }
+
+          // 保留未完成的部分
+          buffer = buffer.slice(lastIndex)
+        }
+
+        // 如果流结束但还没收到 done，尝试解析剩余 buffer
+        if (!cancelled && buffer.trim()) {
+          console.log("[RecipeDetail] 流结束，剩余 buffer:", buffer.slice(0, 100))
         }
       } catch (error) {
+        if (timeoutId) clearTimeout(timeoutId)
         if ((error as Error).name === "AbortError") return
         console.error("[RecipeDetail] 获取步骤失败:", error)
-        setStreamError(error instanceof Error ? error.message : "获取步骤失败")
+        setStreamError(error instanceof Error ? error.message : "获取步骤失败，请重试")
         setIsStreaming(false)
+        setIsLoadingApi(false)
       }
     }
 
@@ -195,7 +232,7 @@ export default function RecipeDetailPage() {
 
     return () => {
       cancelled = true
-      controller.abort()
+      if (timeoutId) clearTimeout(timeoutId)
     }
   }, [recipeName, recipe?.title, recipe?.mainIngredients, recipe?.steps, availableIngredients])
 
@@ -351,9 +388,9 @@ export default function RecipeDetailPage() {
         <section>
           <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
             做法步骤
-            {isStreaming && (
+            {isLoadingApi && (
               <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-orange-500">
-                <Sparkles size={14} />
+                <Loader2 size={14} className="animate-spin" />
                 AI 生成中...
               </span>
             )}
@@ -361,7 +398,15 @@ export default function RecipeDetailPage() {
 
           {streamError ? (
             <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-200 dark:border-red-800">
-              <p className="text-red-600 dark:text-red-400 text-sm">{streamError}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-red-600 dark:text-red-400 text-sm flex-1">{streamError}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="ml-3 px-4 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                >
+                  重试
+                </button>
+              </div>
             </div>
           ) : streamingSteps.length > 0 ? (
             <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-zinc-100 dark:border-zinc-800 space-y-4">
@@ -378,7 +423,7 @@ export default function RecipeDetailPage() {
                 </div>
               ))}
             </div>
-          ) : isStreaming ? (
+          ) : isLoadingApi ? (
             // 流式加载中 - 打字机效果
             <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-zinc-100 dark:border-zinc-800">
               <div className="space-y-4">

@@ -200,9 +200,10 @@ ${ingredientList}
           // 发送最终解析的步骤
           const finalSteps = parseSteps(buffer)
           console.log("[Detail API] AI 生成步骤数:", finalSteps.length)
+          console.log("[Detail API] Raw response:", buffer.slice(0, 200))
 
-          // 发送步骤完成信号
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", steps: finalSteps, raw: buffer })}\n\n`))
+          // 发送步骤完成信号（使用 fullText 与前端约定一致）
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", steps: finalSteps, fullText: buffer })}\n\n`))
           controller.close()
         } catch (error) {
           console.error("[Detail API] 流式传输错误:", error)
