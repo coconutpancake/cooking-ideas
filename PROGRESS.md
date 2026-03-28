@@ -69,6 +69,9 @@
 - [x] 6.5 排序规则（完全匹配 > 高匹配度 > 少缺食材 > 快手） ✅
 - [x] 6.6 AI 辅助筛选（可选，无 API Key 时用本地算法） ✅
 - [x] 6.7 推荐列表页接入真实 API ✅
+- [x] 6.8 流式详情 API `/api/detail`（AI 流式生成烹饪步骤） ✅ ⭐
+- [x] 6.9 详情页打字机效果（逐字显示步骤） ✅
+- [x] 6.10 食材高亮（已有食材高亮，缺少食材置灰） ✅
 
 ### Phase 7: Firebase 后端集成
 - [ ] 7.1 Firebase Auth 认证流程
@@ -103,6 +106,7 @@
 - [x] Phase 1-4, 6, 8 完成
 - [x] Phase 5 AI 视觉模型集成完成 ⭐
 - [x] Phase 6 菜谱推荐功能完成 ⭐
+- [x] Phase 6.8-6.10 流式详情功能完成 ⭐
 
 ### 新增文件
 ```
@@ -110,9 +114,10 @@ src/
 ├── app/
 │   ├── api/
 │   │   ├── vision/route.ts    # AI 视觉识别 API
-│   │   └── recommend/route.ts # 菜谱推荐 API
-│   ├── recommend/page.tsx    # 推荐列表页（已接入真实 API）
-│   └── recipe/[id]/page.tsx  # 菜谱详情页
+│   │   ├── recommend/route.ts # 菜谱推荐 API
+│   │   └── detail/route.ts    # 流式详情 API（AI 生成步骤）⭐
+│   ├── recommend/page.tsx    # 推荐列表页（携带食材参数跳转）
+│   └── recipe/[id]/page.tsx  # 菜谱详情页（流式步骤+高亮）⭐
 ├── components/shared/
 │   └── ImageUploader.tsx       # 拍照/上传组件
 ├── hooks/
@@ -214,3 +219,6 @@ interface Recipe {
 | 2026-03-28 | 完成菜谱推荐功能：API + 匹配算法 + 真实数据渲染 |
 | 2026-03-28 | 重构匹配算法：仅基于主食材计算匹配度，调料不参与计算 |
 | 2026-03-28 | 菜谱详情页：主食材和调料分为两栏独立展示 |
+| 2026-03-28 | 新增流式详情 API `/api/detail`，AI 流式生成烹饪步骤 |
+| 2026-03-28 | 详情页打字机效果逐步显示步骤 |
+| 2026-03-28 | 详情页食材高亮：已有食材高亮，缺少食材置灰 |

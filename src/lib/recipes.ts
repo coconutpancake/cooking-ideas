@@ -520,3 +520,7 @@ export const RECIPES: Recipe[] = [
 export function getRecipeById(id: string): Recipe | undefined {
   return RECIPES.find((r) => r.id === id)
 }
+
+export function getRecipeByTitle(title: string): Recipe | undefined {
+  return RECIPES.find((r) => r.title === title)
+}

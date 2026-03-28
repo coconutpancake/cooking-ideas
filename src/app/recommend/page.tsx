@@ -158,7 +158,7 @@ export default function RecommendPage() {
               {filteredRecommendations.map((recipe) => (
                 <Link
                   key={recipe.recipeId}
-                  href={`/recipe/${recipe.recipeId}`}
+                  href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
                   className="block bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800 hover:shadow-md transition-shadow"
                 >
                   {/* Image */}

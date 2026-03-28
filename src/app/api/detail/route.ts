@@ -1,0 +1,243 @@
+import { NextRequest, NextResponse } from "next/server"
+import OpenAI from "openai"
+
+// ============================================
+// 流式菜谱详情 API - AI 生成烹饪步骤
+// ============================================
+
+interface DetailRequest {
+  recipeName: string
+  mainIngredients: string[]
+  availableIngredients: string[]
+}
+
+function createOpenAIClient(): OpenAI {
+  const apiKey = process.env.AI_API_KEY
+  const baseURL = process.env.AI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+  if (!apiKey) {
+    throw new Error("未配置 AI_API_KEY")
+  }
+
+  return new OpenAI({
+    apiKey,
+    baseURL,
+    dangerouslyAllowBrowser: false,
+  })
+}
+
+// ============================================
+// 格式化食材列表
+// ============================================
+
+function formatIngredients(available: string[], all: string[]): string {
+  const availableSet = new Set(available.map((i) => i.toLowerCase()))
+  const result: string[] = []
+
+  for (const ing of all) {
+    const isAvailable = availableSet.has(ing.toLowerCase())
+    result.push(`${ing}${isAvailable ? " [已有]" : " [缺少]"}`)
+  }
+
+  return result.join("、")
+}
+
+// ============================================
+// 解析 AI 返回的步骤
+// ============================================
+
+interface ParsedStep {
+  order: number
+  description: string
+}
+
+function parseSteps(text: string): ParsedStep[] {
+  const steps: ParsedStep[] = []
+  const lines = text.split("\n").filter((line) => line.trim())
+
+  let order = 1
+  for (const line of lines) {
+    // 移除可能的序号前缀（如 "1."、"第一步" 等）
+    const cleaned = line
+      .replace(/^[1-9][\.、]?\s*/, "")
+      .replace(/^第[一二三四五六七八九十百千万\d]+[步章节个]/, "")
+      .trim()
+
+    if (cleaned.length > 5) {
+      steps.push({ order, description: cleaned })
+      order++
+    }
+  }
+
+  // 如果解析失败，至少返回一个包含原文的步骤
+  if (steps.length === 0 && text.trim()) {
+    steps.push({ order: 1, description: text.trim() })
+  }
+
+  return steps
+}
+
+// ============================================
+// API Route Handler - 流式响应
+// ============================================
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: DetailRequest = await request.json()
+    const { recipeName, mainIngredients, availableIngredients } = body
+
+    if (!recipeName) {
+      return NextResponse.json(
+        { success: false, error: "缺少菜谱名称" },
+        { status: 400 }
+      )
+    }
+
+    console.log("[Detail API] 生成步骤，菜谱:", recipeName)
+    console.log("[Detail API] 主食材:", mainIngredients)
+    console.log("[Detail API] 已有食材:", availableIngredients)
+
+    // 如果没有 API Key，使用本地步骤
+    if (!process.env.AI_API_KEY) {
+      console.log("[Detail API] 无 API Key，使用本地数据")
+
+      // 从 recipes.ts 导入（运行时导入避免循环依赖）
+      const { getRecipeByTitle, getRecipeById } = await import("@/lib/recipes")
+      const recipe = getRecipeByTitle(recipeName) || getRecipeById(recipeName)
+
+      if (recipe && recipe.steps) {
+        const text = recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n")
+        const encoder = new TextEncoder()
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`[STEPS]${JSON.stringify(recipe.steps)}[/STEPS]`))
+            controller.close()
+          },
+        })
+
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        })
+      }
+
+      return NextResponse.json(
+        { success: false, error: "本地无此菜谱步骤" },
+        { status: 404 }
+      )
+    }
+
+    // 有 API Key，使用 AI 流式生成
+    const client = createOpenAIClient()
+    const model = process.env.TEXT_MODEL_NAME || "qwen-plus"
+
+    // 格式化食材清单
+    const ingredientList = formatIngredients(availableIngredients, mainIngredients)
+
+    const prompt = `你是一个经验丰富的中国厨师。请为「${recipeName}」生成详细的烹饪步骤。
+
+现有食材状态：
+${ingredientList}
+
+要求：
+1. 根据现有食材，生成 4-6 个清晰明确的烹饪步骤
+2. 每一步要具体说明操作和火候
+3. 如果有缺少的食材，在步骤中提醒用户准备
+4. 语言简洁生动，像大厨在指导
+5. 只输出步骤，不要其他解释
+
+格式要求：
+- 每一步单独一行
+- 以数字序号开头（如 "1. 热锅凉油..."）
+- 不要输出其他内容`
+
+    console.log("[Detail API] 调用 AI 流式生成...")
+
+    const stream = await client.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: "你是一个专业的中餐厨师，擅长用简洁清晰的语言指导烹饪。",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+      stream: true,
+    })
+
+    // 创建流式响应
+    const encoder = new TextEncoder()
+    let buffer = ""
+    let stepBuffer = ""
+    let inStepBlock = false
+
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || ""
+            buffer += content
+            stepBuffer += content
+
+            // 实时发送增量内容
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "chunk", content })}\n\n`))
+
+            // 检测步骤是否完成（遇到换行或步骤数量足够）
+            if (stepBuffer.includes("\n") || stepBuffer.length > 200) {
+              const parsed = parseSteps(stepBuffer)
+              if (parsed.length >= 4) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "steps", steps: parsed })}\n\n`))
+                stepBuffer = ""
+              }
+            }
+          }
+
+          // 发送最终解析的步骤
+          const finalSteps = parseSteps(buffer)
+          console.log("[Detail API] AI 生成步骤数:", finalSteps.length)
+
+          // 发送步骤完成信号
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", steps: finalSteps, raw: buffer })}\n\n`))
+          controller.close()
+        } catch (error) {
+          console.error("[Detail API] 流式传输错误:", error)
+          controller.error(error)
+        }
+      },
+    })
+
+    return new Response(readableStream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    })
+  } catch (error) {
+    console.error("[Detail API] 错误:", error instanceof Error ? error.message : String(error))
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "服务器内部错误",
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// GET 请求返回 API 状态
+export async function GET() {
+  const hasKey = !!process.env.AI_API_KEY
+  return NextResponse.json({
+    status: "ok",
+    mode: hasKey ? "ai-streaming" : "local",
+    description: hasKey ? "AI 流式生成烹饪步骤" : "使用本地菜谱数据",
+  })
+}

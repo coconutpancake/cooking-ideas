@@ -1,16 +1,203 @@
 "use client"
 
-import { useRouter, useParams } from "next/navigation"
+import { useRouter, useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Share2, Heart, Clock, ChefHat, CheckCircle2, Circle, Flame } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { ArrowLeft, Share2, Heart, Clock, ChefHat, CheckCircle2, Circle, Flame, Sparkles, Loader2 } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { getRecipeById } from "@/lib/recipes"
+
+interface Step {
+  order: number
+  description: string
+}
+
+interface StreamMessage {
+  type: "chunk" | "steps" | "done"
+  content?: string
+  steps?: Step[]
+  raw?: string
+}
 
 export default function RecipeDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const recipeId = params.id as string
+
+  // 从 URL 获取用户已有食材信息
+  const availableStr = searchParams.get("available") || ""
+  const seasoningsStr = searchParams.get("seasonings") || ""
+  const recipeName = searchParams.get("title") || ""
+
+  const availableIngredients = availableStr ? availableStr.split(",").filter(Boolean) : []
+  const seasonings = seasoningsStr ? seasoningsStr.split(",").filter(Boolean) : []
+
   const recipe = getRecipeById(recipeId)
+
+  // 流式步骤状态
+  const [streamingSteps, setStreamingSteps] = useState<Step[]>([])
+  const [displayedText, setDisplayedText] = useState("")
+  const [isStreaming, setIsStreaming] = useState(true)
+  const [streamError, setStreamError] = useState<string | null>(null)
+
+  // 用于打字机效果的 ref
+  const textBufferRef = useRef("")
+  const fullStepsRef = useRef<Step[]>([])
+  const textIndexRef = useRef(0)
+
+  // 高亮食材名称在文本中
+  const highlightIngredients = useCallback(
+    (text: string): React.ReactNode => {
+      if (availableIngredients.length === 0) return text
+
+      const allIngredients = [
+        ...recipe?.mainIngredients.map((i) => i.name) || [],
+        ...seasonings,
+      ]
+
+      // 按长度降序排列，避免短词先匹配导致问题
+      const sorted = [...new Set(allIngredients)].sort((a, b) => b.length - a.length)
+
+      const parts: React.ReactNode[] = []
+      let remaining = text
+      let lastIndex = 0
+
+      // 简单的高亮逻辑：找到食材名称就高亮
+      for (const ing of sorted) {
+        const idx = remaining.indexOf(ing)
+        if (idx !== -1) {
+          if (idx > lastIndex) {
+            parts.push(remaining.slice(lastIndex, idx))
+          }
+          parts.push(
+            <span
+              key={`${ing}-${idx}`}
+              className="bg-orange-200 dark:bg-orange-800/50 text-orange-700 dark:text-orange-300 px-0.5 rounded"
+            >
+              {ing}
+            </span>
+          )
+          lastIndex = idx + ing.length
+        }
+      }
+
+      if (lastIndex < remaining.length) {
+        parts.push(remaining.slice(lastIndex))
+      }
+
+      return parts.length > 0 ? parts : text
+    },
+    [availableIngredients, recipe?.mainIngredients, seasonings]
+  )
+
+  // 获取流式步骤
+  useEffect(() => {
+    if (!recipeName) return
+
+    let cancelled = false
+    const controller = new AbortController()
+
+    const fetchSteps = async () => {
+      try {
+        setIsStreaming(true)
+        setStreamError(null)
+        textBufferRef.current = ""
+        fullStepsRef.current = []
+        textIndexRef.current = 0
+
+        // 如果有本地步骤，直接使用
+        if (recipe?.steps && recipe.steps.length > 0) {
+          const text = recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n")
+          textBufferRef.current = text
+          fullStepsRef.current = recipe.steps
+
+          // 打字机效果
+          for (let i = 0; i <= text.length && !cancelled; i++) {
+            await new Promise((r) => setTimeout(r, 15))
+            setDisplayedText(text.slice(0, i))
+          }
+
+          if (!cancelled) {
+            setStreamingSteps(recipe.steps)
+            setIsStreaming(false)
+          }
+          return
+        }
+
+        // 调用流式 API
+        const response = await fetch("/api/detail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipeName: recipeName || recipe?.title,
+            mainIngredients: recipe?.mainIngredients.map((i) => i.name) || [],
+            availableIngredients,
+          }),
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error(`请求失败: ${response.status}`)
+        }
+
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error("无法读取响应流")
+
+        const decoder = new TextDecoder()
+        let buffer = ""
+
+        while (!cancelled) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          buffer += chunk
+
+          // 解析 SSE 格式: data: {...}\n\n
+          const lines = buffer.split("\n")
+          buffer = lines.pop() || ""
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue
+
+            try {
+              const msg: StreamMessage = JSON.parse(line.slice(6))
+
+              if (msg.type === "chunk" && msg.content) {
+                // 增量文本打字机效果
+                textBufferRef.current += msg.content
+                const newText = textBufferRef.current
+                // 限制更新频率
+                if (newText.length - textIndexRef.current > 5) {
+                  setDisplayedText(newText)
+                  textIndexRef.current = newText.length
+                }
+              } else if (msg.type === "done" && msg.steps) {
+                fullStepsRef.current = msg.steps
+                setStreamingSteps(msg.steps)
+                setDisplayedText(textBufferRef.current)
+              }
+            } catch {
+              // 忽略解析错误
+            }
+          }
+        }
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return
+        console.error("[RecipeDetail] 获取步骤失败:", error)
+        setStreamError(error instanceof Error ? error.message : "获取步骤失败")
+        setIsStreaming(false)
+      }
+    }
+
+    fetchSteps()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [recipeName, recipe?.title, recipe?.mainIngredients, recipe?.steps, availableIngredients])
 
   if (!recipe) {
     return (
@@ -28,6 +215,11 @@ export default function RecipeDetailPage() {
       </div>
     )
   }
+
+  // 判断主食材是否已有
+  const availableSet = new Set(availableIngredients.map((i) => i.toLowerCase()))
+  const isIngredientAvailable = (name: string) =>
+    availableSet.has(name.toLowerCase()) || availableSet.has(name.replace(/[^\u4e00-\u9fa5]/g, "").toLowerCase())
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32">
@@ -98,12 +290,41 @@ export default function RecipeDetailPage() {
               </span>
             </div>
             <div className="space-y-2">
-              {recipe.mainIngredients.map((ing, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-zinc-700 dark:text-zinc-300">{ing.name}</span>
-                  <span className="text-sm text-zinc-400">{ing.amount}</span>
-                </div>
-              ))}
+              {recipe.mainIngredients.map((ing, i) => {
+                const available = isIngredientAvailable(ing.name)
+                return (
+                  <div key={i} className="flex items-center justify-between">
+                    <span
+                      className={
+                        available
+                          ? "text-zinc-700 dark:text-zinc-300"
+                          : "text-zinc-400 dark:text-zinc-600"
+                      }
+                    >
+                      {available ? (
+                        <span className="inline-flex items-center gap-1">
+                          <CheckCircle2 size={14} className="text-green-500" />
+                          {ing.name}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <Circle size={14} className="text-zinc-300 dark:text-zinc-600" />
+                          {ing.name}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={
+                        available
+                          ? "text-sm text-green-600 dark:text-green-400"
+                          : "text-sm text-zinc-400"
+                      }
+                    >
+                      {ing.amount}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -127,13 +348,24 @@ export default function RecipeDetailPage() {
         </section>
 
         {/* Steps Section */}
-        {recipe.steps && (
-          <section>
-            <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
-              做法步骤
-            </h2>
+        <section>
+          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
+            做法步骤
+            {isStreaming && (
+              <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-orange-500">
+                <Sparkles size={14} />
+                AI 生成中...
+              </span>
+            )}
+          </h2>
+
+          {streamError ? (
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-200 dark:border-red-800">
+              <p className="text-red-600 dark:text-red-400 text-sm">{streamError}</p>
+            </div>
+          ) : streamingSteps.length > 0 ? (
             <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-zinc-100 dark:border-zinc-800 space-y-4">
-              {recipe.steps.map((step) => (
+              {streamingSteps.map((step) => (
                 <div key={step.order} className="flex gap-4">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                     <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
@@ -141,13 +373,45 @@ export default function RecipeDetailPage() {
                     </span>
                   </div>
                   <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed pt-1">
-                    {step.description}
+                    {highlightIngredients(step.description)}
                   </p>
                 </div>
               ))}
             </div>
-          </section>
-        )}
+          ) : isStreaming ? (
+            // 流式加载中 - 打字机效果
+            <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-zinc-100 dark:border-zinc-800">
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                      <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
+                        {i}
+                      </span>
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse w-full" />
+                      <div
+                        className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse w-3/4 mt-2"
+                        style={{ animationDelay: `${i * 100}ms` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* 打字机光标 */}
+              <div className="mt-4 flex items-center gap-2">
+                <Loader2 size={16} className="text-orange-500 animate-spin" />
+                <span className="text-sm text-zinc-400">{displayedText}</span>
+                <span className="w-2 h-4 bg-orange-500 animate-pulse" />
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-zinc-100 dark:border-zinc-800 text-center text-zinc-400">
+              正在加载步骤...
+            </div>
+          )}
+        </section>
 
         {/* Tips Section */}
         {recipe.tips && (
@@ -157,7 +421,7 @@ export default function RecipeDetailPage() {
             </h2>
             <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-900">
               <p className="text-amber-800 dark:text-amber-300 text-sm leading-relaxed">
-                {recipe.tips}
+                {highlightIngredients(recipe.tips)}
               </p>
             </div>
           </section>
