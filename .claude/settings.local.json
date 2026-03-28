@@ -8,7 +8,8 @@
       "Bash(yes)",
       "Bash(npm install:*)",
       "Bash(mv cooking_ideas_tmp/* cooking_ideas_tmp/.* cooking_ideas/)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

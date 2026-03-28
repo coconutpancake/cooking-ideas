@@ -1,28 +1,30 @@
 "use client"
 
-import { useState } from "react"
-import { Camera, ChevronDown, ChevronUp, X, Plus, Sparkles } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronDown, ChevronUp, X, Plus, Sparkles, RefreshCw } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { BottomNav } from "@/components/shared/BottomNav"
-import { mockIngredients } from "@/lib/mockData"
+import { ImageUploader } from "@/components/shared/ImageUploader"
+import { useIngredients } from "@/hooks/useIngredients"
+import { cn } from "@/lib/utils"
 
 export default function HomePage() {
-  const [ingredients, setIngredients] = useState<string[]>(mockIngredients.slice(0, 6))
+  const { ingredients, isLoading, add, remove, refresh } = useIngredients()
   const [isFridgeExpanded, setIsFridgeExpanded] = useState(true)
+  const [showUploadTip, setShowUploadTip] = useState(false)
+  const [lastIdentified, setLastIdentified] = useState<string[] | null>(null)
 
-  const removeIngredient = (name: string) => {
-    setIngredients((prev) => prev.filter((i) => i !== name))
+  const handleIngredientsIdentified = (newIngredients: string[]) => {
+    setLastIdentified(newIngredients)
+    setShowUploadTip(true)
+    // 3秒后隐藏提示
+    setTimeout(() => setShowUploadTip(false), 3000)
   }
 
-  const addRandomIngredient = () => {
-    const allIngredients = [
-      "鸡蛋", "番茄", "米饭", "葱", "蒜", "盐", "油", "生抽",
-      "青菜", "豆腐", "土豆", "胡萝卜", "洋葱", "肉末", "辣椒"
-    ]
-    const available = allIngredients.filter((i) => !ingredients.includes(i))
-    if (available.length > 0) {
-      const random = available[Math.floor(Math.random() * available.length)]
-      setIngredients((prev) => [...prev, random])
+  const addManualIngredient = () => {
+    const name = prompt("请输入食材名称：")
+    if (name?.trim()) {
+      add(name.trim())
     }
   }
 
@@ -33,20 +35,24 @@ export default function HomePage() {
       <main className="pb-24 max-w-lg mx-auto">
         {/* Hero Section - Upload Button */}
         <section className="flex flex-col items-center justify-center py-8 px-4">
-          <div className="relative">
-            {/* Main upload button */}
-            <button className="w-32 h-32 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform">
-              <Camera size={40} className="text-white" />
-            </button>
-            {/* Decorative ring */}
-            <div className="absolute inset-0 w-32 h-32 rounded-full border-4 border-dashed border-orange-300 animate-pulse -z-10" />
-          </div>
+          <ImageUploader
+            onIngredientsIdentified={handleIngredientsIdentified}
+          />
           <h2 className="mt-4 text-lg font-medium text-zinc-700 dark:text-zinc-200">
             拍一拍或上传食材
           </h2>
           <p className="mt-1 text-sm text-zinc-400">
             AI 帮你发现美味灵感
           </p>
+
+          {/* Success tip */}
+          {showUploadTip && lastIdentified && (
+            <div className="mt-4 px-4 py-3 bg-green-50 dark:bg-green-900/20 rounded-xl animate-pulse">
+              <p className="text-sm text-green-700 dark:text-green-400">
+                ✓ 已添加：{lastIdentified.join("、")}
+              </p>
+            </div>
+          )}
         </section>
 
         {/* My Fridge Section */}
@@ -66,41 +72,62 @@ export default function HomePage() {
                   {ingredients.length} 种食材
                 </span>
               </div>
-              {isFridgeExpanded ? (
-                <ChevronUp size={20} className="text-zinc-400" />
-              ) : (
-                <ChevronDown size={20} className="text-zinc-400" />
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    refresh()
+                  }}
+                  className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  <RefreshCw size={16} className="text-zinc-400" />
+                </button>
+                {isFridgeExpanded ? (
+                  <ChevronUp size={20} className="text-zinc-400" />
+                ) : (
+                  <ChevronDown size={20} className="text-zinc-400" />
+                )}
+              </div>
             </button>
 
             {/* Ingredients Tags */}
             {isFridgeExpanded && (
               <div className="px-4 pb-4">
-                <div className="flex flex-wrap gap-2">
-                  {ingredients.map((name) => (
-                    <span
-                      key={name}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm rounded-full group hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
-                    >
-                      {name}
-                      <button
-                        onClick={() => removeIngredient(name)}
-                        className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : ingredients.length === 0 ? (
+                  <div className="py-4 text-center text-sm text-zinc-400">
+                    冰箱里还没有食材，拍照或上传识别
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {ingredients.map((item) => (
+                      <span
+                        key={item.id}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm rounded-full group hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
                       >
-                        <X size={12} className="text-zinc-500" />
-                      </button>
-                    </span>
-                  ))}
+                        {item.name}
+                        <button
+                          onClick={() => remove(item.id)}
+                          className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-800"
+                        >
+                          <X size={12} className="text-zinc-500 dark:text-zinc-400" />
+                        </button>
+                      </span>
+                    ))}
 
-                  {/* Add button */}
-                  <button
-                    onClick={addRandomIngredient}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-sm rounded-full hover:border-orange-400 hover:text-orange-500 transition-colors"
-                  >
-                    <Plus size={14} />
-                    添加
-                  </button>
-                </div>
+                    {/* Add button */}
+                    <button
+                      onClick={addManualIngredient}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-sm rounded-full hover:border-orange-400 hover:text-orange-500 transition-colors"
+                    >
+                      <Plus size={14} />
+                      添加
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -128,9 +155,15 @@ export default function HomePage() {
                 <h3 className="font-medium text-zinc-800 dark:text-zinc-200">
                   今日推荐
                 </h3>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  根据你冰箱里的食材，推荐你做番茄炒蛋！简单又美味～
-                </p>
+                {ingredients.length > 0 ? (
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    根据你冰箱里的食材，推荐你做番茄炒蛋！简单又美味～
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    添加食材后，AI 会为你推荐合适的菜谱
+                  </p>
+                )}
               </div>
             </div>
           </div>
