@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronDown, ChevronUp, X, Plus, Sparkles, RefreshCw } from "lucide-react"
+import Link from "next/link"
+import { ChevronDown, ChevronUp, X, Plus, RefreshCw } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { ImageUploader } from "@/components/shared/ImageUploader"
 import { useIngredients } from "@/hooks/useIngredients"
@@ -133,40 +134,15 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Quick Actions */}
+        {/* CTA Button */}
         <section className="px-4 mt-6">
-          <div className="flex gap-3">
-            <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-xl font-medium hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors">
-              <Sparkles size={18} />
-              AI 智能推荐
-            </button>
-            <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-              查看全部菜谱
-            </button>
-          </div>
-        </section>
-
-        {/* Tips Section */}
-        <section className="px-4 mt-6">
-          <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-2xl p-4">
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">💡</span>
-              <div>
-                <h3 className="font-medium text-zinc-800 dark:text-zinc-200">
-                  今日推荐
-                </h3>
-                {ingredients.length > 0 ? (
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    根据你冰箱里的食材，推荐你做番茄炒蛋！简单又美味～
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    添加食材后，AI 会为你推荐合适的菜谱
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+          <Link
+            href="/recommend"
+            className="flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-2xl shadow-lg shadow-orange-500/30 hover:shadow-xl active:scale-[0.98] transition-all"
+          >
+            <span className="text-xl">💡</span>
+            解锁今日菜品灵感
+          </Link>
         </section>
       </main>
     </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, SlidersHorizontal, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat } from "lucide-react"
+import { Search, SlidersHorizontal, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat, ArrowLeft } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { getRecommendations, type Recommendation } from "@/lib/recommendApi"
 import { getIngredients } from "@/lib/storage"
@@ -62,7 +62,18 @@ export default function RecommendPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <StatusBar />
 
-      <main className="pb-24 max-w-lg mx-auto">
+      {/* Back Button */}
+      <div className="px-4 py-2">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-orange-500 transition-colors"
+        >
+          <ArrowLeft size={18} />
+          返回冰箱
+        </Link>
+      </div>
+
+      <main className="pb-8 max-w-lg mx-auto">
         {/* Search Header */}
         <div className="sticky top-14 z-30 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-3 p-4">
