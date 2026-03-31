@@ -2,21 +2,26 @@
 
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { ArrowLeft, Share2, Heart, Clock, ChefHat, CheckCircle2, Circle, Flame, Sparkles, Loader2 } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
-import { getRecipeById } from "@/lib/recipes"
+import { getRecipeById, type Recipe } from "@/lib/recipes"
 
 interface Step {
   order: number
   description: string
 }
 
-interface StreamMessage {
-  type: "chunk" | "steps" | "done"
-  content?: string
-  steps?: Step[]
-  fullText?: string
+// 从 URL 参数构建 AI 菜谱数据
+interface AIGeneratedRecipeData {
+  isAI: true
+  title: string
+  coverImage: string
+  mainIngredients: { name: string; amount: string }[]
+  seasonings: { name: string; amount: string }[]
+  cookingTime: number
+  tags: string[]
+  tips?: string
 }
 
 export default function RecipeDetailPage() {
@@ -27,25 +32,44 @@ export default function RecipeDetailPage() {
 
   // 从 URL 获取用户已有食材信息
   const availableStr = searchParams.get("available") || ""
+  const missingStr = searchParams.get("missing") || ""
   const seasoningsStr = searchParams.get("seasonings") || ""
   const recipeName = searchParams.get("title") || ""
 
-  const availableIngredients = availableStr ? availableStr.split(",").filter(Boolean) : []
-  const seasonings = seasoningsStr ? seasoningsStr.split(",").filter(Boolean) : []
+  const availableIngredients = useMemo(() => availableStr ? availableStr.split(",").filter(Boolean) : [], [availableStr])
+  const missingIngredients = useMemo(() => missingStr ? missingStr.split(",").filter(Boolean) : [], [missingStr])
+  const seasonings = useMemo(() => seasoningsStr ? seasoningsStr.split(",").filter(Boolean) : [], [seasoningsStr])
 
-  const recipe = getRecipeById(recipeId)
+  // 优先从本地库查找
+  const localRecipe = getRecipeById(recipeId)
 
-  // 流式步骤状态
+  // 检查是否是 AI 生成的菜谱（recipeId 以 ai- 开头）
+  const isAIRecipe = recipeId.startsWith("ai-")
+
+  // 构建 AI 菜谱数据（使用完整主食材列表 = 已有 + 缺失）
+  const aiRecipeData = useMemo<AIGeneratedRecipeData | null>(() => {
+    if (!isAIRecipe || !recipeName) return null
+    return {
+      isAI: true,
+      title: decodeURIComponent(recipeName),
+      coverImage: `https://source.unsplash.com/800x400/?${encodeURIComponent(recipeName)},chinesefood`,
+      mainIngredients: [...availableIngredients, ...missingIngredients].map(name => ({ name, amount: "适量" })),
+      seasonings: seasonings.map(name => ({ name, amount: "适量" })),
+      cookingTime: 20,
+      tags: ["AI 推荐"],
+      tips: "根据你冰箱里的食材 AI 智能推荐",
+    }
+  }, [isAIRecipe, recipeName, availableIngredients, missingIngredients, seasonings])
+
+  // 优先使用 AI 数据，否则使用本地数据
+  const recipe = useMemo(() => aiRecipeData || localRecipe, [aiRecipeData, localRecipe])
+
+  // 步骤状态
   const [streamingSteps, setStreamingSteps] = useState<Step[]>([])
   const [displayedText, setDisplayedText] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
   const [isLoadingApi, setIsLoadingApi] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
-
-  // 用于打字机效果的 ref
-  const textBufferRef = useRef("")
-  const fullStepsRef = useRef<Step[]>([])
-  const textIndexRef = useRef(0)
 
   // 高亮食材名称在文本中
   const highlightIngredients = useCallback(
@@ -89,59 +113,35 @@ export default function RecipeDetailPage() {
 
       return parts.length > 0 ? parts : text
     },
-    [availableIngredients, recipe?.mainIngredients, seasonings]
+    [availableIngredients, recipe, seasonings]
   )
 
-  // 获取流式步骤
-  useEffect(() => {
-    if (!recipeName) return
+  // 获取步骤（非流式，简单可靠）
+  const hasFetchedRef = useRef(false)
 
-    let cancelled = false
-    let timeoutId: NodeJS.Timeout | null = null
+  useEffect(() => {
+    if (!recipeName || hasFetchedRef.current) return
 
     const fetchSteps = async () => {
+      hasFetchedRef.current = true
+
       try {
         setStreamError(null)
-        textBufferRef.current = ""
-        fullStepsRef.current = []
-        textIndexRef.current = 0
 
         // 如果有本地步骤，直接使用
         if (recipe?.steps && recipe.steps.length > 0) {
           console.log("[RecipeDetail] 使用本地步骤:", recipe.steps.length)
           const text = recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n")
-          textBufferRef.current = text
-          fullStepsRef.current = recipe.steps
-          const localSteps = recipe.steps
-
-          // 打字机效果
-          for (let i = 0; i <= text.length && !cancelled; i++) {
-            await new Promise((r) => setTimeout(r, 15))
-            if (!cancelled) {
-              setDisplayedText(text.slice(0, i))
-            }
-          }
-
-          // 无论是否被取消，都设置步骤（本地数据已经获取，不存在内存泄漏）
-          setStreamingSteps(localSteps)
+          setStreamingSteps(recipe.steps)
+          setDisplayedText(text)
           setIsStreaming(false)
           return
         }
 
-        // 调用流式 API
+        // 调用 API
         setIsLoadingApi(true)
         setIsStreaming(true)
         console.log("[RecipeDetail] 开始请求 /api/detail，recipeName:", recipeName)
-
-        // 设置 45 秒超时
-        timeoutId = setTimeout(() => {
-          if (!cancelled) {
-            console.error("[RecipeDetail] 请求超时")
-            setStreamError("生成超时，请检查网络后重试")
-            setIsStreaming(false)
-            setIsLoadingApi(false)
-          }
-        }, 45000)
 
         const response = await fetch("/api/detail", {
           method: "POST",
@@ -153,88 +153,30 @@ export default function RecipeDetailPage() {
           }),
         })
 
-        clearTimeout(timeoutId || undefined)
-
         if (!response.ok) {
           throw new Error(`请求失败: ${response.status}`)
         }
 
-        const reader = response.body?.getReader()
-        if (!reader) throw new Error("无法读取响应流")
+        const data = await response.json()
+        console.log("[RecipeDetail] 收到响应，success:", data.success, "steps:", data.steps?.length)
 
-        const decoder = new TextDecoder()
-        let buffer = ""
-
-        console.log("[RecipeDetail] 开始读取流...")
-
-        while (!cancelled) {
-          const { done, value } = await reader.read()
-
-          if (done) {
-            console.log("[RecipeDetail] 流读取完成，buffer:", buffer.slice(0, 100))
-            break
-          }
-
-          const chunk = decoder.decode(value, { stream: true })
-          console.log("[RecipeDetail] 收到 chunk:", chunk.slice(0, 80))
-          buffer += chunk
-
-          // 解析 SSE：找到所有完整的 "data: {...}\n\n" 消息
-          // 使用正则匹配：data: 开头，遇到 \n\n 或字符串结束
-          const sseRegex = /data: (.+?)(?=\n\n|$)/g
-          let match
-          let lastIndex = 0
-
-          while ((match = sseRegex.exec(buffer)) !== null) {
-            lastIndex = match.index + match[0].length
-            try {
-              const msg: StreamMessage = JSON.parse(match[1])
-              console.log("[RecipeDetail] 解析消息:", msg.type)
-
-              if (msg.type === "chunk" && msg.content !== undefined) {
-                textBufferRef.current += msg.content
-                setDisplayedText(textBufferRef.current)
-              } else if (msg.type === "done" && msg.steps) {
-                console.log("[RecipeDetail] 收到 done，步骤数:", msg.steps.length)
-                fullStepsRef.current = msg.steps
-                setStreamingSteps(msg.steps)
-                setDisplayedText(msg.fullText || textBufferRef.current)
-                setIsStreaming(false)
-                setIsLoadingApi(false)
-              } else if (msg.type === "steps" && msg.steps) {
-                // 中间步骤（部分完成）
-                fullStepsRef.current = msg.steps
-              }
-            } catch (parseError) {
-              console.warn("[RecipeDetail] 解析失败:", match[1].slice(0, 50))
-            }
-          }
-
-          // 保留未完成的部分
-          buffer = buffer.slice(lastIndex)
-        }
-
-        // 如果流结束但还没收到 done，尝试解析剩余 buffer
-        if (!cancelled && buffer.trim()) {
-          console.log("[RecipeDetail] 流结束，剩余 buffer:", buffer.slice(0, 100))
+        if (data.success && data.steps) {
+          setStreamingSteps(data.steps)
+          setDisplayedText(data.fullText || "")
+        } else if (data.error) {
+          throw new Error(data.error)
         }
       } catch (error) {
-        if (timeoutId) clearTimeout(timeoutId)
-        if ((error as Error).name === "AbortError") return
         console.error("[RecipeDetail] 获取步骤失败:", error)
         setStreamError(error instanceof Error ? error.message : "获取步骤失败，请重试")
+      } finally {
         setIsStreaming(false)
         setIsLoadingApi(false)
       }
     }
 
     fetchSteps()
-
-    return () => {
-      cancelled = true
-      if (timeoutId) clearTimeout(timeoutId)
-    }
-  }, [recipeName, recipe?.title, recipe?.mainIngredients, recipe?.steps, availableIngredients])
+  }, [recipeName, recipe, availableIngredients])
 
   if (!recipe) {
     return (
@@ -259,7 +201,7 @@ export default function RecipeDetailPage() {
     availableSet.has(name.toLowerCase()) || availableSet.has(name.replace(/[^\u4e00-\u9fa5]/g, "").toLowerCase())
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32 max-w-md mx-auto">
       <StatusBar />
 
       {/* Hero Image with Overlay */}

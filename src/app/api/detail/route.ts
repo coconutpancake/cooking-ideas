@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
 
 // ============================================
-// 流式菜谱详情 API - AI 生成烹饪步骤
+// 菜谱详情 API - AI 生成烹饪步骤
 // ============================================
 
 interface DetailRequest {
@@ -78,7 +78,7 @@ function parseSteps(text: string): ParsedStep[] {
 }
 
 // ============================================
-// API Route Handler - 流式响应
+// API Route Handler - 非流式响应（稳定可靠）
 // ============================================
 
 export async function POST(request: NextRequest) {
@@ -106,21 +106,11 @@ export async function POST(request: NextRequest) {
       const recipe = getRecipeByTitle(recipeName) || getRecipeById(recipeName)
 
       if (recipe && recipe.steps) {
-        const text = recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n")
-        const encoder = new TextEncoder()
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(`[STEPS]${JSON.stringify(recipe.steps)}[/STEPS]`))
-            controller.close()
-          },
-        })
-
-        return new Response(stream, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-          },
+        console.log("[Detail API] 返回本地步骤，步数:", recipe.steps.length)
+        return NextResponse.json({
+          success: true,
+          steps: recipe.steps,
+          fullText: recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n"),
         })
       }
 
@@ -130,7 +120,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 有 API Key，使用 AI 流式生成
+    // 有 API Key，使用 AI 生成（非流式，一次性返回）
     const client = createOpenAIClient()
     const model = process.env.TEXT_MODEL_NAME || "qwen-plus"
 
@@ -154,9 +144,9 @@ ${ingredientList}
 - 以数字序号开头（如 "1. 热锅凉油..."）
 - 不要输出其他内容`
 
-    console.log("[Detail API] 调用 AI 流式生成...")
+    console.log("[Detail API] 调用 AI 生成（等待完成）...")
 
-    const stream = await client.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model,
       messages: [
         {
@@ -167,58 +157,18 @@ ${ingredientList}
       ],
       temperature: 0.7,
       max_tokens: 800,
-      stream: true,
     })
 
-    // 创建流式响应
-    const encoder = new TextEncoder()
-    let buffer = ""
-    let stepBuffer = ""
-    let inStepBlock = false
+    const fullText = completion.choices[0]?.message?.content || ""
+    const steps = parseSteps(fullText)
 
-    const readableStream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content || ""
-            buffer += content
-            stepBuffer += content
+    console.log("[Detail API] AI 生成完成，步骤数:", steps.length)
+    console.log("[Detail API] Raw response:", fullText.slice(0, 200))
 
-            // 实时发送增量内容
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "chunk", content })}\n\n`))
-
-            // 检测步骤是否完成（遇到换行或步骤数量足够）
-            if (stepBuffer.includes("\n") || stepBuffer.length > 200) {
-              const parsed = parseSteps(stepBuffer)
-              if (parsed.length >= 4) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "steps", steps: parsed })}\n\n`))
-                stepBuffer = ""
-              }
-            }
-          }
-
-          // 发送最终解析的步骤
-          const finalSteps = parseSteps(buffer)
-          console.log("[Detail API] AI 生成步骤数:", finalSteps.length)
-          console.log("[Detail API] Raw response:", buffer.slice(0, 200))
-
-          // 发送步骤完成信号（使用 fullText 与前端约定一致）
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", steps: finalSteps, fullText: buffer })}\n\n`))
-          controller.close()
-        } catch (error) {
-          console.error("[Detail API] 流式传输错误:", error)
-          controller.error(error)
-        }
-      },
-    })
-
-    return new Response(readableStream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
+    return NextResponse.json({
+      success: true,
+      steps,
+      fullText,
     })
   } catch (error) {
     console.error("[Detail API] 错误:", error instanceof Error ? error.message : String(error))
