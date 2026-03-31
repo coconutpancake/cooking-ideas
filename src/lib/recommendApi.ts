@@ -5,7 +5,7 @@
 export interface Recommendation {
   recipeId: string
   title: string
-  coverImage: string
+  emoji: string
   cookingMethod: string
   matchingScore: number
   availableMainIngredients: string[]

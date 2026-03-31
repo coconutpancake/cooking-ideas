@@ -6,6 +6,43 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { ArrowLeft, Share2, Heart, Clock, ChefHat, CheckCircle2, Circle, Flame, Sparkles, Loader2 } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { getRecipeById, type Recipe } from "@/lib/recipes"
+import { cn } from "@/lib/utils"
+
+// 预设渐变色组合（莫兰迪柔和色系，不含蓝色）
+const GRADIENTS = [
+  "from-amber-200 via-orange-200 to-rose-200",
+  "from-stone-200 via-amber-100 to-orange-100",
+  "from-rose-200 via-orange-200 to-yellow-100",
+  "from-emerald-100 via-green-100 to-teal-100",
+  "from-violet-100 via-purple-100 to-fuchsia-100",
+  "from-orange-200 via-amber-100 to-yellow-100",
+  "from-pink-100 via-rose-100 to-orange-100",
+  "from-lime-100 via-green-100 to-emerald-100",
+]
+
+// 根据菜名生成固定渐变色
+function getGradientForTitle(title: string): string {
+  let hash = 0
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
+}
+
+// 根据菜名生成固定 emoji（用于本地菜谱）
+function getEmojiForTitle(title: string): string {
+  const emojiMap: Record<string, string> = {
+    番茄炒蛋: "🍅🍳", 蒜蓉青菜: "🥬🧄", 麻婆豆腐: "🧈🌶️", 蛋炒饭: "🍳🍚",
+    红烧肉: "🥩🍖", 可乐鸡翅: "🍗🥤", 酸辣土豆丝: "🥔🌶️", 宫保鸡丁: "🍗🥜",
+    清蒸鲈鱼: "🐟♨️", 西红柿炒蛋: "🍅🍳", 辣椒炒肉: "🌶️🥩", 回锅肉: "🥓🌶️",
+    糖醋里脊: "🍖🍋", 红烧排骨: "🍖🥓", 蒸蛋羹: "🥚♨️", 煮鸡蛋: "🍳💧",
+    炒花生: "🥜🍳", 拍黄瓜: "🥒🧄", 凉拌木耳: "🍄🧂", 紫菜蛋花汤: "🥣🍳",
+    番茄蛋汤: "🍅🥚", 土豆烧牛肉: "🥔🥩", 咖喱牛肉: "🍛🥩", 青椒肉丝: "🌶️🥩",
+    鱼香肉丝: "🐟🥩", 溜肝尖: "🫀🌶️", 爆炒腰花: "🐷🌶️", 葱爆羊肉: "🐑🧅",
+    水煮牛肉: "🥩🌶️", 干煸四季豆: "🫛🌶️", 地三鲜: "🍆🥔🫑",
+  }
+  return emojiMap[title] || "🍽️"
+}
 
 interface Step {
   order: number
@@ -16,7 +53,7 @@ interface Step {
 interface AIGeneratedRecipeData {
   isAI: true
   title: string
-  coverImage: string
+  emoji: string
   mainIngredients: { name: string; amount: string }[]
   seasonings: { name: string; amount: string }[]
   cookingTime: number
@@ -35,6 +72,7 @@ export default function RecipeDetailPage() {
   const missingStr = searchParams.get("missing") || ""
   const seasoningsStr = searchParams.get("seasonings") || ""
   const recipeName = searchParams.get("title") || ""
+  const emojiParam = searchParams.get("emoji") || ""
 
   const availableIngredients = useMemo(() => availableStr ? availableStr.split(",").filter(Boolean) : [], [availableStr])
   const missingIngredients = useMemo(() => missingStr ? missingStr.split(",").filter(Boolean) : [], [missingStr])
@@ -52,17 +90,20 @@ export default function RecipeDetailPage() {
     return {
       isAI: true,
       title: decodeURIComponent(recipeName),
-      coverImage: `https://source.unsplash.com/800x400/?${encodeURIComponent(recipeName)},chinesefood`,
+      emoji: decodeURIComponent(emojiParam) || "🍽️",
       mainIngredients: [...availableIngredients, ...missingIngredients].map(name => ({ name, amount: "适量" })),
       seasonings: seasonings.map(name => ({ name, amount: "适量" })),
       cookingTime: 20,
       tags: ["AI 推荐"],
       tips: "根据你冰箱里的食材 AI 智能推荐",
     }
-  }, [isAIRecipe, recipeName, availableIngredients, missingIngredients, seasonings])
+  }, [isAIRecipe, recipeName, emojiParam, availableIngredients, missingIngredients, seasonings])
 
   // 优先使用 AI 数据，否则使用本地数据
   const recipe = useMemo(() => aiRecipeData || localRecipe, [aiRecipeData, localRecipe])
+
+  // 获取 emoji（AI 菜谱从 aiRecipeData，本地菜谱从标题 hash）
+  const recipeEmoji = recipe ? ("emoji" in recipe ? recipe.emoji : getEmojiForTitle(recipe.title)) : "🍽️"
 
   // 步骤状态
   const [streamingSteps, setStreamingSteps] = useState<Step[]>([])
@@ -206,13 +247,11 @@ export default function RecipeDetailPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32 max-w-md mx-auto">
       <StatusBar />
 
-      {/* Hero Image with Overlay */}
-      <div className="relative h-72 bg-zinc-200 dark:bg-zinc-800">
-        <img
-          src={recipe.coverImage}
-          alt={recipe.title}
-          className="w-full h-full object-cover"
-        />
+      {/* Hero Emoji + Gradient Block */}
+      <div className={cn("relative h-72 bg-gradient-to-br", getGradientForTitle(recipe.title))}>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-8xl drop-shadow-lg">{recipeEmoji}</span>
+        </div>
 
         {/* Top Navigation */}
         <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between">

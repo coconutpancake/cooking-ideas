@@ -7,6 +7,7 @@ import OpenAI from "openai"
 
 interface AIGeneratedRecipe {
   title: string
+  emoji: string                // Emoji 配图（如 🍅🍳）
   mainIngredients: string[]   // AI 推断的该菜谱所需主食材
   seasonings: string[]         // AI 推断的该菜谱所需调料
   cookingMethod?: string       // 烹饪方式（可选）
@@ -16,7 +17,7 @@ interface AIGeneratedRecipe {
 interface Recommendation {
   recipeId: string
   title: string
-  coverImage: string
+  emoji: string
   cookingMethod: string
   matchingScore: number
   availableMainIngredients: string[]
@@ -310,8 +311,12 @@ function tryAddRecipe(
   // 提取 cookingTime（支持完整 key 和简化 key，用 d 避免与 title 的 t 冲突）
   const cookingTime = (obj.cookingTime ?? obj.d ?? 15) as number
 
+  // 提取 emoji（支持完整 key 和简化 key e）
+  const emoji = (obj.emoji ?? obj.e ?? "🍽️") as string
+
   results.push({
     title,
+    emoji: typeof emoji === "string" && emoji.length <= 4 ? emoji : "🍽️",
     mainIngredients,
     seasonings,
     cookingMethod: typeof cookingMethod === "string" ? cookingMethod : "炒",
@@ -338,16 +343,6 @@ function createOpenAIClient(): OpenAI {
     baseURL,
     dangerouslyAllowBrowser: false,
   })
-}
-
-// ============================================
-// 获取封面图（基于菜名关键词）
-// ============================================
-
-function getCoverImage(title: string): string {
-  const keyword = encodeURIComponent(title)
-  // 使用 Unsplash 搜索图片
-  return `https://source.unsplash.com/400x300/?${keyword},chinesefood`
 }
 
 // ============================================
@@ -382,20 +377,7 @@ export async function POST(request: NextRequest) {
     const ingredientList = ingredients.join("、")
 
     // 强制多样性 Prompt：必须恰好 10 道，同一主食材不超过 2 道
-    const prompt = `你是一个顶级中餐厨师。请严格根据用户食材「${ingredientList}」，生成恰好10道菜谱推荐。
-
-【硬性约束 - 违反将被拒绝】：
-1. 恰好10道菜，不多不少
-2. 同一主食材（如：排骨、鸡蛋、番茄）最多出现2次
-3. 必须包含：至少2道纯素菜、至少3道荤素搭配、至少1道蛋类菜
-4. 必须覆盖不同烹饪方式：炒、煮、蒸、烤、炸、凉拌
-
-【简化JSON格式 - 严格按此格式】：
-[{"t":"菜名","m":["主食材1","主食材2"],"s":["调料1"],"c":"炒","d":15},...]
-
-字段说明：t=菜名(必填), m=主食材数组(必填且>=1), s=调料数组(选填), c=烹饪方式(选填默认炒), d=时间分钟(选填默认15)
-
-只输出JSON数组，不要任何其他文字。数组必须是完整的10个对象。`
+    const prompt = "你是一个顶级中餐厨师。请严格根据用户食材「" + ingredientList + "」，生成恰好10道菜谱推荐。\n\n【硬性约束 - 违反将被拒绝】：\n1. 恰好10道菜，不多不少\n2. 同一主食材（如：排骨、鸡蛋、番茄）最多出现2次\n3. 必须包含：至少2道纯素菜、至少3道荤素搭配、至少1道蛋类菜\n4. 必须覆盖不同烹饪方式：炒、煮、蒸、烤、炸、凉拌\n\n【简化JSON格式 - 严格按此格式】：\n[{\"t\":\"菜名\",\"e\":\"🍅🍳\",\"m\":[\"主食材1\",\"主食材2\"],\"s\":[\"调料1\"],\"c\":\"炒\",\"d\":15},...]\n\n字段说明：t=菜名(必填), e=Emoji配图(必填，1-2个emoji), m=主食材数组(必填且>=1), s=调料数组(选填), c=烹饪方式(选填默认炒), d=时间分钟(选填默认15)\n\n只输出JSON数组，不要任何其他文字。数组必须是完整的10个对象。"
 
     console.log("[Recommend API] 调用 AI 生成多样化推荐...")
 
@@ -451,7 +433,7 @@ export async function POST(request: NextRequest) {
     const recommendations: Recommendation[] = top10.map((r, index) => ({
       recipeId: `ai-${Date.now()}-${index}`,
       title: r.recipe.title,
-      coverImage: getCoverImage(r.recipe.title),
+      emoji: r.recipe.emoji || "🍽️",
       cookingMethod: r.cookingMethod,
       matchingScore: Math.round(r.matchingScore * 100) / 100,
       availableMainIngredients: r.availableMainIngredients,

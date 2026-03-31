@@ -8,6 +8,27 @@ import { getRecommendations, type Recommendation } from "@/lib/recommendApi"
 import { getIngredients } from "@/lib/storage"
 import { cn } from "@/lib/utils"
 
+// 预设渐变色组合（莫兰迪柔和色系，不含蓝色）
+const GRADIENTS = [
+  "from-amber-200 via-orange-200 to-rose-200",
+  "from-stone-200 via-amber-100 to-orange-100",
+  "from-rose-200 via-orange-200 to-yellow-100",
+  "from-emerald-100 via-green-100 to-teal-100",
+  "from-violet-100 via-purple-100 to-fuchsia-100",
+  "from-orange-200 via-amber-100 to-yellow-100",
+  "from-pink-100 via-rose-100 to-orange-100",
+  "from-lime-100 via-green-100 to-emerald-100",
+]
+
+// 根据菜名生成固定渐变色
+function getGradientForTitle(title: string): string {
+  let hash = 0
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
+}
+
 export default function RecommendPage() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -171,16 +192,14 @@ export default function RecommendPage() {
                 return (
                 <Link
                   key={recipe.recipeId}
-                  href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&missing=${encodeURIComponent(recipe.missingMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
+                  href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&emoji=${encodeURIComponent(recipe.emoji)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&missing=${encodeURIComponent(recipe.missingMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
                   className="block bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800 hover:shadow-md transition-shadow"
                 >
-                  {/* Image */}
-                  <div className="relative h-48 bg-zinc-200 dark:bg-zinc-800">
-                    <img
-                      src={recipe.coverImage}
-                      alt={recipe.title}
-                      className="w-full h-full object-cover"
-                    />
+                  {/* Emoji + Gradient Block */}
+                  <div className={cn("relative h-48 bg-gradient-to-br", getGradientForTitle(recipe.title))}>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-7xl drop-shadow-lg">{recipe.emoji}</span>
+                    </div>
                     {/* Time badge */}
                     <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full">
                       <Clock size={12} className="text-white" />

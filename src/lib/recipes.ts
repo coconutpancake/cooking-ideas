@@ -10,7 +10,7 @@ export interface Ingredient {
 export interface Recipe {
   id: string
   title: string
-  coverImage: string
+  emoji?: string
   cookingTime: number
   cookingMethod: "炒" | "煮" | "蒸" | "烤" | "炸" | "凉拌" | "其他"
   tags: string[]
