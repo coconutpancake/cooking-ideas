@@ -26,10 +26,6 @@ function createOpenAIClient(): OpenAI {
   })
 }
 
-// ============================================
-// 格式化食材列表
-// ============================================
-
 function formatIngredients(available: string[], all: string[]): string {
   const availableSet = new Set(available.map((i) => i.toLowerCase()))
   const result: string[] = []
@@ -42,10 +38,6 @@ function formatIngredients(available: string[], all: string[]): string {
   return result.join("、")
 }
 
-// ============================================
-// 解析 AI 返回的步骤
-// ============================================
-
 interface ParsedStep {
   order: number
   description: string
@@ -57,7 +49,6 @@ function parseSteps(text: string): ParsedStep[] {
 
   let order = 1
   for (const line of lines) {
-    // 移除可能的序号前缀（如 "1."、"第一步" 等）
     const cleaned = line
       .replace(/^[1-9][\.、]?\s*/, "")
       .replace(/^第[一二三四五六七八九十百千万\d]+[步章节个]/, "")
@@ -69,7 +60,6 @@ function parseSteps(text: string): ParsedStep[] {
     }
   }
 
-  // 如果解析失败，至少返回一个包含原文的步骤
   if (steps.length === 0 && text.trim()) {
     steps.push({ order: 1, description: text.trim() })
   }
@@ -78,7 +68,7 @@ function parseSteps(text: string): ParsedStep[] {
 }
 
 // ============================================
-// API Route Handler - 非流式响应（稳定可靠）
+// API Route Handler - 非流式响应
 // ============================================
 
 export async function POST(request: NextRequest) {
@@ -97,11 +87,10 @@ export async function POST(request: NextRequest) {
     console.log("[Detail API] 主食材:", mainIngredients)
     console.log("[Detail API] 已有食材:", availableIngredients)
 
-    // 如果没有 API Key，使用本地步骤
+    // 没有 API Key，使用本地步骤
     if (!process.env.AI_API_KEY) {
       console.log("[Detail API] 无 API Key，使用本地数据")
 
-      // 从 recipes.ts 导入（运行时导入避免循环依赖）
       const { getRecipeByTitle, getRecipeById } = await import("@/lib/recipes")
       const recipe = getRecipeByTitle(recipeName) || getRecipeById(recipeName)
 
@@ -120,35 +109,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 有 API Key，使用 AI 生成（非流式，一次性返回）
+    // 有 API Key，使用 AI 生成
     const client = createOpenAIClient()
     const model = process.env.TEXT_MODEL_NAME || "qwen-plus"
-
-    // 格式化食材清单
     const ingredientList = formatIngredients(availableIngredients, mainIngredients)
 
-    const prompt = `你是一个经验丰富的中国厨师。请为「${recipeName}」生成详细的烹饪步骤。
-
-现有食材状态：
-${ingredientList}
-
-要求：
-1. 根据现有食材，生成 4-6 个清晰明确的烹饪步骤
-2. 每一步要具体说明操作和火候
-3. 如果有缺少的食材，在步骤中提醒用户准备
-4. 语言简洁生动，像大厨在指导
-
-格式要求：
-- 每一步单独一行
-- 以数字序号开头（如 "1. 热锅凉油..."）
-- 步骤输出完成后，另起一行输出 "### 小贴士：" 开头的小贴士（1-2句话，简短实用）
-
-示例格式：
-1. 热锅凉油，倒入蛋液
-2. 鸡蛋凝固后盛出备用
-3. 锅中再加少许油，放入番茄块翻炒出汁
-4. 加入鸡蛋，调入盐翻炒均匀
-### 小贴士：番茄炒至微微出汁时口感最佳，避免过度翻炒。`
+    const prompt =
+      "你是一个经验丰富的中国厨师。请为「" +
+      recipeName +
+      "」生成详细的烹饪步骤。\n\n" +
+      "现有食材状态：\n" +
+      ingredientList +
+      "\n\n" +
+      "要求：\n" +
+      "1. 根据现有食材，生成 4-6 个清晰明确的烹饪步骤\n" +
+      "2. 每一步要具体说明操作和火候\n" +
+      "3. 如果有缺少的食材，在步骤中提醒用户准备\n" +
+      "4. 语言简洁生动，像大厨在指导\n\n" +
+      "格式要求：\n" +
+      "- 每一步单独一行\n" +
+      "- 以数字序号开头（如 1. 热锅凉油...）\n" +
+      "- 步骤输出完成后，另起一行输出 ### 小贴士： 开头的小贴士（1-2句话，简短实用）\n\n" +
+      "示例格式：\n" +
+      "1. 热锅凉油，倒入蛋液\n" +
+      "2. 鸡蛋凝固后盛出备用\n" +
+      "3. 锅中再加少许油，放入番茄块翻炒出汁\n" +
+      "4. 加入鸡蛋，调入盐翻炒均匀\n" +
+      "### 小贴士：番茄炒至微微出汁时口感最佳，避免过度翻炒。"
 
     console.log("[Detail API] 调用 AI 生成（等待完成）...")
 
@@ -167,18 +154,25 @@ ${ingredientList}
 
     const fullText = completion.choices[0]?.message?.content || ""
 
-    // 提取小贴士（### 小贴士： 之后的文本）
+    // 提取小贴士
     let tips: string | undefined
     const tipsMatch = fullText.match(/###\s*小贴士[：:]\s*([\s\S]+)$/)
     if (tipsMatch) {
       tips = tipsMatch[1].trim()
     }
 
-    // 提取纯步骤文本（去掉小贴士部分后再解析）
-    const stepsText = tips ? fullText.replace(/###\s*小贴士[：:][\s\S]+$/, "").trim() : fullText
+    // 提取纯步骤文本
+    const stepsText = tips
+      ? fullText.replace(/###\s*小贴士[：:][\s\S]+$/, "").trim()
+      : fullText
     const steps = parseSteps(stepsText)
 
-    console.log("[Detail API] AI 生成完成，步骤数:", steps.length, "小贴士:", tips?.slice(0, 30) || "无")
+    console.log(
+      "[Detail API] AI 生成完成，步骤数:",
+      steps.length,
+      "小贴士:",
+      tips?.slice(0, 30) || "无"
+    )
     console.log("[Detail API] Raw response:", fullText.slice(0, 200))
 
     return NextResponse.json({
@@ -188,7 +182,10 @@ ${ingredientList}
       fullText,
     })
   } catch (error) {
-    console.error("[Detail API] 错误:", error instanceof Error ? error.message : String(error))
+    console.error(
+      "[Detail API] 错误:",
+      error instanceof Error ? error.message : String(error)
+    )
 
     return NextResponse.json(
       {
@@ -205,7 +202,7 @@ export async function GET() {
   const hasKey = !!process.env.AI_API_KEY
   return NextResponse.json({
     status: "ok",
-    mode: hasKey ? "ai-streaming" : "local",
-    description: hasKey ? "AI 流式生成烹饪步骤" : "使用本地菜谱数据",
+    mode: hasKey ? "ai" : "local",
+    description: hasKey ? "AI 生成烹饪步骤" : "使用本地菜谱数据",
   })
 }
