@@ -165,10 +165,13 @@ export default function RecommendPage() {
                 为你推荐 ({filteredRecommendations.length})
               </h2>
 
-              {filteredRecommendations.map((recipe) => (
+              {filteredRecommendations.map((recipe) => {
+                // 构建完整主食材列表（已有 + 缺失）
+                const allMainIngredients = [...recipe.availableMainIngredients, ...recipe.missingMainIngredients]
+                return (
                 <Link
                   key={recipe.recipeId}
-                  href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
+                  href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&missing=${encodeURIComponent(recipe.missingMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
                   className="block bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800 hover:shadow-md transition-shadow"
                 >
                   {/* Image */}
@@ -251,7 +254,8 @@ export default function RecommendPage() {
                     </div>
                   </div>
                 </Link>
-              ))}
+              )
+              })}
             </>
           )}
         </div>

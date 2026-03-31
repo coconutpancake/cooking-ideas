@@ -67,6 +67,7 @@ export default function RecipeDetailPage() {
   // 步骤状态
   const [streamingSteps, setStreamingSteps] = useState<Step[]>([])
   const [displayedText, setDisplayedText] = useState("")
+  const [aiTips, setAiTips] = useState<string | undefined>(undefined)
   const [isStreaming, setIsStreaming] = useState(false)
   const [isLoadingApi, setIsLoadingApi] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
@@ -163,6 +164,7 @@ export default function RecipeDetailPage() {
         if (data.success && data.steps) {
           setStreamingSteps(data.steps)
           setDisplayedText(data.fullText || "")
+          setAiTips(data.tips)
         } else if (data.error) {
           throw new Error(data.error)
         }
@@ -401,17 +403,33 @@ export default function RecipeDetailPage() {
         </section>
 
         {/* Tips Section */}
-        {recipe.tips && (
-          <section>
-            <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
-              小贴士
-            </h2>
-            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-900">
-              <p className="text-amber-800 dark:text-amber-300 text-sm leading-relaxed">
-                {highlightIngredients(recipe.tips)}
-              </p>
-            </div>
-          </section>
+        {/* AI 菜谱：仅当 API 返回了小贴士才显示；本地菜谱：使用自带的小贴士 */}
+        {isAIRecipe ? (
+          aiTips && (
+            <section>
+              <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
+                小贴士
+              </h2>
+              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-900">
+                <p className="text-amber-800 dark:text-amber-300 text-sm leading-relaxed">
+                  {highlightIngredients(aiTips)}
+                </p>
+              </div>
+            </section>
+          )
+        ) : (
+          recipe.tips && (
+            <section>
+              <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-3">
+                小贴士
+              </h2>
+              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-900">
+                <p className="text-amber-800 dark:text-amber-300 text-sm leading-relaxed">
+                  {highlightIngredients(recipe.tips)}
+                </p>
+              </div>
+            </section>
+          )
         )}
       </main>
 

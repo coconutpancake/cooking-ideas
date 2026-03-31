@@ -137,12 +137,18 @@ ${ingredientList}
 2. 每一步要具体说明操作和火候
 3. 如果有缺少的食材，在步骤中提醒用户准备
 4. 语言简洁生动，像大厨在指导
-5. 只输出步骤，不要其他解释
 
 格式要求：
 - 每一步单独一行
 - 以数字序号开头（如 "1. 热锅凉油..."）
-- 不要输出其他内容`
+- 步骤输出完成后，另起一行输出 "### 小贴士：" 开头的小贴士（1-2句话，简短实用）
+
+示例格式：
+1. 热锅凉油，倒入蛋液
+2. 鸡蛋凝固后盛出备用
+3. 锅中再加少许油，放入番茄块翻炒出汁
+4. 加入鸡蛋，调入盐翻炒均匀
+### 小贴士：番茄炒至微微出汁时口感最佳，避免过度翻炒。`
 
     console.log("[Detail API] 调用 AI 生成（等待完成）...")
 
@@ -160,14 +166,25 @@ ${ingredientList}
     })
 
     const fullText = completion.choices[0]?.message?.content || ""
-    const steps = parseSteps(fullText)
 
-    console.log("[Detail API] AI 生成完成，步骤数:", steps.length)
+    // 提取小贴士（### 小贴士： 之后的文本）
+    let tips: string | undefined
+    const tipsMatch = fullText.match(/###\s*小贴士[：:]\s*([\s\S]+)$/)
+    if (tipsMatch) {
+      tips = tipsMatch[1].trim()
+    }
+
+    // 提取纯步骤文本（去掉小贴士部分后再解析）
+    const stepsText = tips ? fullText.replace(/###\s*小贴士[：:][\s\S]+$/, "").trim() : fullText
+    const steps = parseSteps(stepsText)
+
+    console.log("[Detail API] AI 生成完成，步骤数:", steps.length, "小贴士:", tips?.slice(0, 30) || "无")
     console.log("[Detail API] Raw response:", fullText.slice(0, 200))
 
     return NextResponse.json({
       success: true,
       steps,
+      tips,
       fullText,
     })
   } catch (error) {
