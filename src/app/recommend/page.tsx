@@ -2,31 +2,46 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, SlidersHorizontal, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat, ArrowLeft } from "lucide-react"
+import { Search, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat, ArrowLeft, Sparkles } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { getRecommendations, type Recommendation } from "@/lib/recommendApi"
 import { getIngredients } from "@/lib/storage"
 import { cn } from "@/lib/utils"
 
-// 预设渐变色组合（莫兰迪柔和色系，不含蓝色）
+// 预设渐变色组合（低饱和奶油暖橘色系）
 const GRADIENTS = [
-  "from-amber-200 via-orange-200 to-rose-200",
-  "from-stone-200 via-amber-100 to-orange-100",
-  "from-rose-200 via-orange-200 to-yellow-100",
-  "from-emerald-100 via-green-100 to-teal-100",
-  "from-violet-100 via-purple-100 to-fuchsia-100",
-  "from-orange-200 via-amber-100 to-yellow-100",
-  "from-pink-100 via-rose-100 to-orange-100",
-  "from-lime-100 via-green-100 to-emerald-100",
+  "from-[#F5DDD8] via-[#F0D0C8] to-[#E8C8B8]",
+  "from-[#E2D4E6] via-[#D8C8DC] to-[#D0C0D0]",
+  "from-[#D5E8D5] via-[#C8DFC8] to-[#B8D8B8]",
+  "from-[#E8D4C8] via-[#DEC8B8] to-[#D4BEA8]",
+  "from-[#F0E4D8] via-[#E8D8C8] to-[#DECCB8]",
+  "from-[#E4D8E8] via-[#D8D0E0] to-[#D0C8D8]",
+  "from-[#D8E8E4] via-[#C8E0D8] to-[#C0D8D0]",
 ]
 
-// 根据菜名生成固定渐变色
 function getGradientForTitle(title: string): string {
   let hash = 0
   for (let i = 0; i < title.length; i++) {
     hash = title.charCodeAt(i) + ((hash << 5) - hash)
   }
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
+}
+
+// 无 emoji 的菜谱卡片 - 用纯色块代替
+function RecipeCardGraphic({ title, gradient }: { title: string; gradient: string }) {
+  // 用食材相关的几何图形组合代替 emoji
+  return (
+    <div className={cn("relative w-full h-full flex items-center justify-center", gradient)}>
+      {/* 抽象几何图案 - 手绘风格 */}
+      <svg viewBox="0 0 100 100" className="w-24 h-24 opacity-60">
+        <circle cx="50" cy="50" r="35" fill="none" stroke="white" strokeWidth="2" strokeDasharray="4 3"/>
+        <circle cx="50" cy="50" r="25" fill="white" fillOpacity="0.2"/>
+        <circle cx="35" cy="40" r="8" fill="white" fillOpacity="0.4"/>
+        <circle cx="60" cy="55" r="6" fill="white" fillOpacity="0.3"/>
+        <rect x="40" y="30" width="15" height="10" rx="3" fill="white" fillOpacity="0.3" transform="rotate(15 47 35)"/>
+      </svg>
+    </div>
+  )
 }
 
 export default function RecommendPage() {
@@ -36,7 +51,8 @@ export default function RecommendPage() {
   const [selectedMethod, setSelectedMethod] = useState<string>("全部")
   const [userIngredients, setUserIngredients] = useState<string[]>([])
 
-  const cookingMethods = ["全部", "炒", "煮", "蒸", "烤", "炸", "凉拌"]
+  // 筛选分类 - 低饱和色块胶囊
+  const cookingMethods = ["全部", "快手菜", "家常菜", "蒸煮", "炒制"]
 
   const fetchRecommendations = async () => {
     setIsLoading(true)
@@ -52,17 +68,14 @@ export default function RecommendPage() {
         return
       }
 
-      console.log("[RecommendPage] 开始获取推荐，食材:", ingredients)
       const response = await getRecommendations(ingredients)
 
       if (response.success && response.data) {
         setRecommendations(response.data.recommendations)
-        console.log("[RecommendPage] ✅ 获取到", response.data.recommendations.length, "条推荐")
       } else {
         setError(response.error || "获取推荐失败")
       }
     } catch (err) {
-      console.error("[RecommendPage] ❌ 获取推荐失败:", err)
       setError(err instanceof Error ? err.message : "获取推荐失败，请重试")
     } finally {
       setIsLoading(false)
@@ -73,21 +86,26 @@ export default function RecommendPage() {
     fetchRecommendations()
   }, [])
 
-  // 过滤后的推荐
   const filteredRecommendations =
     selectedMethod === "全部"
       ? recommendations
-      : recommendations.filter((r) => r.cookingMethod === selectedMethod)
+      : recommendations.filter((r) => {
+          if (selectedMethod === "快手菜") return r.cookingTime <= 20
+          if (selectedMethod === "家常菜") return r.cookingMethod === "炒" || r.cookingMethod === "煮"
+          if (selectedMethod === "蒸煮") return r.cookingMethod === "蒸" || r.cookingMethod === "煮"
+          if (selectedMethod === "炒制") return r.cookingMethod === "炒"
+          return true
+        })
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-[var(--background)]">
       <StatusBar />
 
       {/* Back Button */}
-      <div className="px-4 py-2">
+      <div className="px-5 py-3">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-orange-500 transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
         >
           <ArrowLeft size={18} />
           返回冰箱
@@ -95,38 +113,47 @@ export default function RecommendPage() {
       </div>
 
       <main className="pb-8 max-w-lg mx-auto">
-        {/* Search Header */}
-        <div className="sticky top-14 z-30 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center gap-3 p-4">
-            {/* Search Input */}
-            <div className="flex-1 flex items-center gap-2 px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-full">
-              <Search size={18} className="text-zinc-400" />
+
+        {/* Sticky Header */}
+        <div className="sticky top-14 z-30 bg-[var(--background)]/90 backdrop-blur-md">
+
+          {/* 标题区 - 圆润复古字体 */}
+          <div className="px-5 pt-2 pb-4">
+            <h1 className="text-2xl font-normal text-title text-[var(--foreground)] tracking-wide">
+              今日推荐
+            </h1>
+            <p className="text-sm text-[var(--muted-foreground)] mt-1">根据你的冰箱量身定制</p>
+          </div>
+
+          {/* 搜索栏 - 奶油磨砂质感 */}
+          <div className="flex items-center gap-3 px-5 pb-3">
+            <div className="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-[var(--radius-xl)] glass-card">
+              <Search size={16} className="text-[var(--muted-foreground)]" />
               <input
                 type="text"
                 placeholder="搜索菜谱..."
-                className="flex-1 bg-transparent outline-none text-sm text-zinc-700 dark:text-zinc-200 placeholder:text-zinc-400"
+                className="flex-1 bg-transparent outline-none text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]"
               />
             </div>
-            {/* Refresh Button */}
             <button
               onClick={fetchRecommendations}
-              className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              className="p-3 rounded-[var(--radius-lg)] glass-card hover:bg-white/80 transition-colors"
             >
-              <RefreshCw size={20} className={cn("text-zinc-600 dark:text-zinc-400", isLoading && "animate-spin")} />
+              <RefreshCw size={18} className={cn("text-[var(--muted-foreground)]", isLoading && "animate-spin")} />
             </button>
           </div>
 
-          {/* Category Pills */}
-          <div className="flex gap-2 px-4 pb-3 overflow-x-auto scrollbar-hide">
+          {/* 筛选胶囊 - 低饱和色块 */}
+          <div className="flex gap-2.5 px-5 pb-5 overflow-x-auto scrollbar-hide">
             {cookingMethods.map((method) => (
               <button
                 key={method}
                 onClick={() => setSelectedMethod(method)}
                 className={cn(
-                  "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
+                  "px-4 py-2 rounded-[var(--radius-full)] text-sm font-medium whitespace-nowrap transition-all",
                   selectedMethod === method
-                    ? "bg-orange-500 text-white"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                    ? "tag-active"
+                    : "bg-white/60 text-[var(--muted-foreground)] hover:bg-white/80"
                 )}
               >
                 {method}
@@ -136,34 +163,37 @@ export default function RecommendPage() {
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
-          {/* User Ingredients Summary */}
+        <div className="px-4 space-y-5">
+
+          {/* User Ingredients Summary - 淡奶绿渐变 */}
           {userIngredients.length > 0 && (
-            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3">
-              <p className="text-sm text-orange-700 dark:text-orange-400">
-                <ChefHat size={14} className="inline mr-1" />
-                根据「{userIngredients.join("、")}」为你推荐
+            <div className="bg-gradient-to-r from-[#D5E8D5] to-[#C8DFC8] rounded-[var(--radius-lg)] p-4">
+              <p className="text-sm text-[#5B7E5B] font-medium flex items-center gap-2">
+                <Sparkles size={14} />
+                根据「{userIngredients.slice(0, 3).join("、")}{userIngredients.length > 3 ? "..." : ""}」为你推荐
               </p>
             </div>
           )}
 
           {/* Loading State */}
           {isLoading && (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 size={40} className="text-orange-500 animate-spin" />
-              <p className="mt-4 text-sm text-zinc-500">正在为你计算最佳推荐...</p>
+            <div className="flex flex-col items-center justify-center py-28">
+              <div className="w-12 h-12 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin"/>
+              <p className="mt-5 text-sm text-[var(--muted-foreground)]">正在为你计算最佳推荐...</p>
             </div>
           )}
 
           {/* Error State */}
           {!isLoading && error && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <AlertCircle size={48} className="text-zinc-300 dark:text-zinc-600" />
-              <p className="mt-4 text-sm text-zinc-500 px-8">{error}</p>
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="w-16 h-16 rounded-[var(--radius-xl)] bg-[var(--muted)] flex items-center justify-center mb-4">
+                <ChefHat size={28} className="text-[var(--muted-foreground)] opacity-50" />
+              </div>
+              <p className="text-sm text-[var(--muted-foreground)] px-8">{error}</p>
               {userIngredients.length === 0 && (
                 <Link
                   href="/"
-                  className="mt-4 px-6 py-2 bg-orange-500 text-white text-sm font-medium rounded-full"
+                  className="mt-6 px-6 py-3 rounded-[var(--radius-full)] btn-primary text-sm font-medium shadow-md"
                 >
                   去添加食材
                 </Link>
@@ -173,108 +203,85 @@ export default function RecommendPage() {
 
           {/* Empty State */}
           {!isLoading && !error && filteredRecommendations.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <ChefHat size={48} className="text-zinc-300 dark:text-zinc-600" />
-              <p className="mt-4 text-sm text-zinc-500">暂无符合条件的推荐</p>
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <svg width="64" height="64" viewBox="0 0 64 64" fill="none" className="opacity-30">
+                <rect x="12" y="8" width="40" height="48" rx="8" fill="var(--muted)"/>
+                <line x1="12" y1="28" x2="52" y2="28" stroke="var(--foreground)" strokeWidth="2"/>
+              </svg>
+              <p className="mt-4 text-sm text-[var(--muted-foreground)]">暂无符合条件的推荐</p>
             </div>
           )}
 
-          {/* Recipe List */}
+          {/* Recipe List - 2列瀑布流 */}
           {!isLoading && !error && filteredRecommendations.length > 0 && (
             <>
-              <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">
-                为你推荐 ({filteredRecommendations.length})
-              </h2>
+              <div className="flex items-center justify-between px-1 pt-2">
+                <h2 className="text-base font-medium text-[var(--foreground)]">
+                  为你推荐 <span className="text-[var(--muted-foreground)]">({filteredRecommendations.length})</span>
+                </h2>
+              </div>
 
-              {filteredRecommendations.map((recipe) => {
-                // 构建完整主食材列表（已有 + 缺失）
-                const allMainIngredients = [...recipe.availableMainIngredients, ...recipe.missingMainIngredients]
-                return (
-                <Link
-                  key={recipe.recipeId}
-                  href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&emoji=${encodeURIComponent(recipe.emoji)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&missing=${encodeURIComponent(recipe.missingMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
-                  className="block bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800 hover:shadow-md transition-shadow"
-                >
-                  {/* Emoji + Gradient Block */}
-                  <div className={cn("relative h-48 bg-gradient-to-br", getGradientForTitle(recipe.title))}>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-7xl drop-shadow-lg">{recipe.emoji}</span>
-                    </div>
-                    {/* Time badge */}
-                    <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full">
-                      <Clock size={12} className="text-white" />
-                      <span className="text-xs text-white">{recipe.cookingTime}分钟</span>
-                    </div>
-                    {/* Method badge */}
-                    <div className="absolute top-3 right-3 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full">
-                      <span className="text-xs font-medium text-zinc-700">
-                        {recipe.cookingMethod}
-                      </span>
-                    </div>
-                    {/* Match score badge */}
-                    <div className="absolute bottom-3 left-3 px-2 py-1 bg-orange-500/90 backdrop-blur-sm rounded-full">
-                      <span className="text-xs font-medium text-white">
-                        匹配度 {Math.round(recipe.matchingScore * 100)}%
-                      </span>
-                    </div>
-                  </div>
+              <div className="masonry-grid">
+                {filteredRecommendations.map((recipe) => {
+                  const gradient = getGradientForTitle(recipe.title)
+                  const matchPercent = Math.round(recipe.matchingScore * 100)
 
-                  {/* Content */}
-                  <div className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-zinc-800 dark:text-zinc-100">
+                  return (
+                    <Link
+                      key={recipe.recipeId}
+                      href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&emoji=${encodeURIComponent(recipe.emoji)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&missing=${encodeURIComponent(recipe.missingMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
+                      className="block rounded-[var(--radius-xl)] glass-card overflow-hidden hover:shadow-lg transition-all duration-300 animate-fade-in"
+                    >
+                      {/* 卡片头部 - 渐变色块 + 几何图案 */}
+                      <div className={cn("relative h-40", gradient)}>
+                        <RecipeCardGraphic title={recipe.title} gradient={gradient} />
+
+                        {/* 时间标签 */}
+                        <div className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/70 backdrop-blur-sm">
+                          <Clock size={11} className="text-[var(--foreground)]" />
+                          <span className="text-xs font-medium text-[var(--foreground)]">{recipe.cookingTime}分钟</span>
+                        </div>
+
+                        {/* 匹配度标签 */}
+                        <div className={cn(
+                          "absolute bottom-3 left-3 px-3 py-1 rounded-full text-xs font-medium",
+                          matchPercent >= 80 ? "match-high" : matchPercent >= 60 ? "match-medium" : "match-low"
+                        )}>
+                          {matchPercent}% 匹配
+                        </div>
+                      </div>
+
+                      {/* 卡片内容 */}
+                      <div className="p-4">
+                        <h3 className="text-base font-medium text-[var(--foreground)] leading-snug">
                           {recipe.title}
                         </h3>
-                      </div>
-                    </div>
 
-                    {/* Availability Status */}
-                    <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                      {recipe.isAllAvailable ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                            <CheckCircle2 size={14} className="text-green-600 dark:text-green-400" />
-                          </div>
-                          <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                            主食材已备齐
-                          </span>
-                          <span className="text-xs text-zinc-400">，可以开始做菜！</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                            <AlertCircle size={14} className="text-zinc-400" />
-                          </div>
-                          <span className="text-sm text-zinc-500">
-                            缺少{" "}
-                            <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                              {recipe.missingMainIngredients.length}种
-                            </span>
-                            {" "}主食材
-                          </span>
-                          <div className="flex gap-1 ml-1">
-                            {recipe.missingMainIngredients.slice(0, 2).map((ing) => (
-                              <span
-                                key={ing}
-                                className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs rounded"
-                              >
-                                {ing}
+                        {/* 可用性状态 */}
+                        <div className="mt-3 pt-3 border-t border-[var(--border)]/50">
+                          {recipe.isAllAvailable ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-5 h-5 rounded-full bg-[var(--accent-green)] flex items-center justify-center">
+                                <CheckCircle2 size={11} className="text-[#5B7E5B]" />
+                              </div>
+                              <span className="text-xs font-medium text-[#5B7E5B]">主食材已备齐</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-5 h-5 rounded-full bg-[var(--muted)] flex items-center justify-center">
+                                <AlertCircle size={11} className="text-[var(--muted-foreground)]" />
+                              </div>
+                              <span className="text-xs text-[var(--muted-foreground)]">
+                                缺少 {recipe.missingMainIngredients.length} 种
                               </span>
-                            ))}
-                            {recipe.missingMainIngredients.length > 2 && (
-                              <span className="text-xs text-zinc-400">
-                                +{recipe.missingMainIngredients.length - 2}
-                              </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              )
-              })}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
             </>
           )}
         </div>

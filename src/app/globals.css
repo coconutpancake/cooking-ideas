@@ -1,78 +1,64 @@
 @import "tailwindcss";
 
+/* ─── 色彩系统 ────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --card: #ffffff;
-  --card-foreground: #171717;
-  --popover: #ffffff;
-  --popover-foreground: #171717;
-  --primary: #f97316;
-  --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #171717;
-  --muted: #f5f5f5;
-  --muted-foreground: #71717a;
-  --accent: #f5f5f5;
-  --accent-foreground: #171717;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #f97316;
-  --radius: 0.5rem;
+  /* 基底色：低饱和奶杏裸色 */
+  --background: #FAF5EF;
+  --foreground: #4A4039;
+  --card: #FFFFFF;
+  --card-foreground: #4A4039;
+  --popover: #FFFFFF;
+  --popover-foreground: #4A4039;
+
+  /* 主题色：低饱和奶油暖橘 */
+  --primary: #E8A87C;
+  --primary-hover: #D4956A;
+  --primary-foreground: #FFFFFF;
+
+  /* 辅色：莫兰迪色系 */
+  --secondary: #F0EBE3;
+  --secondary-foreground: #6B5E54;
+  --muted: #EDE7DD;
+  --muted-foreground: #9B8E82;
+
+  /* 点缀色 */
+  --accent-purple: #E2D4E6;
+  --accent-green: #C8DFC8;
+  --accent-pink: #F5DDD8;
+  --accent-sage: #D4D9C8;
+
+  --accent: #E8A87C;
+  --accent-foreground: #FFFFFF;
+  --destructive: #E07070;
+  --destructive-foreground: #FFFFFF;
+  --border: #E8E2D9;
+  --input: #E8E2D9;
+  --ring: #E8A87C;
+
+  /* 圆角系统 */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-2xl: 40px;
+  --radius-full: 9999px;
 }
 
-.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --card: #0a0a0a;
-  --card-foreground: #ededed;
-  --popover: #0a0a0a;
-  --popover-foreground: #ededed;
-  --primary: #f97316;
-  --primary-foreground: #ffffff;
-  --secondary: #262626;
-  --secondary-foreground: #ededed;
-  --muted: #262626;
-  --muted-foreground: #a1a1a1;
-  --accent: #262626;
-  --accent-foreground: #ededed;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #262626;
-  --input: #262626;
-  --ring: #f97316;
+/* ─── 字体系统 ────────────────────────────────────────────── */
+@font-face {
+  font-family: 'ZCOOL QingKe HuangYou';
+  src: url('https://fonts.gstatic.com/s/zcoolqingkehuangyou/v16/QnG9afqFb-35DPSs2MLNAXsH3J6L5ZL8i7U.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  --font-display: 'ZCOOL QingKe HuangYou', 'Noto Serif SC', Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
 }
 
+/* ─── 主题基础 ────────────────────────────────────────────── */
 * {
   border-color: var(--border);
 }
@@ -80,17 +66,17 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Safe area padding for mobile */
+/* ─── 安全区适配 ──────────────────────────────────────────── */
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* Hide scrollbar but keep functionality */
+/* ─── 滚动条 ──────────────────────────────────────────────── */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -99,10 +85,154 @@ body {
   display: none;
 }
 
-/* Mobile-optimized touch targets */
+/* ─── 奶油磨砂质感组件 ────────────────────────────────────── */
+.glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.4) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 4px 24px rgba(139, 109, 76, 0.06),
+    0 1px 3px rgba(139, 109, 76, 0.04);
+}
+
+.frosted-surface {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 252, 247, 0.8) 0%,
+    rgba(250, 245, 239, 0.6) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ─── 胶囊标签系统 ────────────────────────────────────────── */
+.tag-meat {
+  background: linear-gradient(135deg, #F5DDD8 0%, #F0D0C8 100%);
+  color: #B87068;
+}
+.tag-vegetable {
+  background: linear-gradient(135deg, #D5E8D5 0%, #C8DFC8 100%);
+  color: #6B8E6B;
+}
+.tag-other {
+  background: linear-gradient(135deg, #E2D4E6 0%, #D8C8DC 100%);
+  color: #8E7B9B;
+}
+.tag-active {
+  background: linear-gradient(135deg, #E8A87C 0%, #D4956A 100%);
+  color: #FFFFFF;
+  box-shadow: 0 4px 16px rgba(232, 168, 124, 0.3);
+}
+
+/* ─── 动画 ────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+.animate-fade-in-scale {
+  animation: fade-in-scale 0.3s ease-out forwards;
+}
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* ─── 文字层级 ────────────────────────────────────────────── */
+.text-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.text-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+.text-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+.text-caption {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
+/* ─── 按钮质感 ────────────────────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #E8A87C 0%, #D4956A 100%);
+  color: #FFFFFF;
+  border: none;
+  box-shadow:
+    0 4px 16px rgba(232, 168, 124, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #D4956A 0%, #C0855A 100%);
+  box-shadow:
+    0 6px 20px rgba(232, 168, 124, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(232, 168, 124, 0.2);
+  color: #6B5E54;
+  box-shadow: 0 2px 8px rgba(139, 109, 76, 0.04);
+}
+
+/* ─── 匹配度标签色系 ──────────────────────────────────────── */
+.match-high {
+  background: linear-gradient(135deg, #E8A87C 0%, #D4956A 100%);
+  color: #FFFFFF;
+}
+.match-medium {
+  background: linear-gradient(135deg, #E2D4E6 0%, #D8C8DC 100%);
+  color: #7B6B8B;
+}
+.match-low {
+  background: linear-gradient(135deg, #D5E8D5 0%, #C8DFC8 100%);
+  color: #5B7E5B;
+}
+
+/* ─── 移动端适配 ──────────────────────────────────────────── */
 @media (max-width: 640px) {
   button, a {
     min-height: 44px;
     min-width: 44px;
+  }
+}
+
+/* ─── 瀑布流布局 ──────────────────────────────────────────── */
+.masonry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 380px) {
+  .masonry-grid {
+    gap: 12px;
   }
 }

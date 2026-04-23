@@ -17,7 +17,16 @@
       "Bash(netstat -ano)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''Total:'''', d[''''data''''][''''totalCandidates'''']\\); [print\\(f\"\"  {r[''''title'''']}: {r[''''matchingScore'''']*100:.0f}% | missing: {r[''''missingMainIngredients'''']}\"\"\\) for r in d[''''data''''][''''recommendations'''']]\")",
       "Bash(node -e \":*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(xxd)",
+      "Bash(xxd src/app/api/detail/route.ts)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(claude plugin:*)",
+      "Bash(cmd //c \"rmdir /s /q \\\\\"E:\\\\\\\\vibe coding项目\\\\\\\\做菜灵感\\\\\\\\cooking_ideas\\\\\\\\node_modules\\\\\\\\openai\\\\\\\\src\\\\\\\\resources\\\\\\\\skills\\\\\"\" 2>&1)",
+      "Bash(npm i:*)",
+      "Bash(claude:*)"
     ]
   }
 }
