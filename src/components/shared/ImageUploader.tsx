@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import { Camera, Upload, X, Loader2, AlertCircle } from "lucide-react"
 import { compressImage, isMobileDevice } from "@/lib/imageUtils"
 import { identifyIngredients, type IngredientItem } from "@/lib/mockApi"
-import { addIngredient } from "@/lib/storage"
+import { addIngredients } from "@/lib/storage"
 import { notifyIngredientsChanged } from "@/hooks/useIngredients"
 import { cn } from "@/lib/utils"
 
@@ -34,11 +34,8 @@ export function ImageUploader({ onIngredientsIdentified, className }: ImageUploa
       const response = await identifyIngredients(compressed.base64)
 
       if (response.success && response.data && response.data.ingredients.length > 0) {
-        let addedCount = 0
-        response.data.ingredients.forEach((item) => {
-          const result = addIngredient(item.name)
-          if (result) addedCount++
-        })
+        const names = response.data.ingredients.map(i => i.name)
+        addIngredients(names)
         notifyIngredientsChanged()
         onIngredientsIdentified?.(response.data.ingredients)
       } else {

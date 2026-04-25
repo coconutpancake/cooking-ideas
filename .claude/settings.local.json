@@ -26,7 +26,9 @@
       "Bash(claude plugin:*)",
       "Bash(cmd //c \"rmdir /s /q \\\\\"E:\\\\\\\\vibe coding项目\\\\\\\\做菜灵感\\\\\\\\cooking_ideas\\\\\\\\node_modules\\\\\\\\openai\\\\\\\\src\\\\\\\\resources\\\\\\\\skills\\\\\"\" 2>&1)",
       "Bash(npm i:*)",
-      "Bash(claude:*)"
+      "Bash(claude:*)",
+      "Bash(node -e \"require\\('fs'\\).readFileSync\\('src/lib/utils.ts', 'utf8'\\)\")",
+      "Bash(node -e \"require\\('fs'\\).readFileSync\\('src/lib/storage.ts', 'utf8'\\)\")"
     ]
   }
 }
