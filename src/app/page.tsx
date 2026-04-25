@@ -83,7 +83,6 @@ const UploadTrigger = forwardRef<UploadTriggerRef>((_, ref) => {
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handleFileChange}
         className="hidden"
       />

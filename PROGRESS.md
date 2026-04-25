@@ -112,7 +112,7 @@
 - [x] Phase 1-4, 6, 8 完成
 - [x] Phase 5 AI 视觉模型集成完成 ⭐
 - [x] Phase 6 菜谱推荐功能完成 ⭐
-- [x] Phase 6.8-6.15 详情页 + Emoji UI 功能完成 ⭐
+- [x] Phase 6.8-6.16 详情页 + Emoji UI + 缓存机制完成 ⭐
 
 ### 新增文件
 ```
@@ -121,19 +121,20 @@ src/
 │   ├── api/
 │   │   ├── vision/route.ts    # AI 视觉识别 API
 │   │   ├── recommend/route.ts # 菜谱推荐 API
-│   │   └── detail/route.ts    # 流式详情 API（AI 生成步骤）⭐
-│   ├── recommend/page.tsx    # 推荐列表页（携带食材参数跳转）
-│   └── recipe/[id]/page.tsx  # 菜谱详情页（流式步骤+高亮）⭐
+│   │   └── detail/route.ts    # AI 生成烹饪步骤 API ⭐
+│   ├── recommend/page.tsx      # 推荐列表页（缓存优先）⭐
+│   └── recipe/[id]/page.tsx    # 菜谱详情页 ⭐
 ├── components/shared/
 │   └── ImageUploader.tsx       # 拍照/上传组件
 ├── hooks/
 │   └── useIngredients.ts       # 食材状态 Hook
 └── lib/
-    ├── recommendApi.ts        # 推荐 API 调用
-    ├── recipes.ts            # 菜谱数据（含完整步骤和小贴士）
-    ├── imageUtils.ts           # 图片压缩工具
-    ├── mockApi.ts              # 视觉识别 API 调用
-    └── storage.ts             # LocalStorage 工具
+    ├── recommendApi.ts         # 推荐 API 调用
+    ├── recipes.ts             # 菜谱数据
+    ├── imageUtils.ts          # 图片压缩工具
+    ├── mockApi.ts             # 视觉识别 API 调用
+    ├── storage.ts             # LocalStorage 工具（含推荐缓存）⭐
+    └── utils.ts               # 工具函数（含 formatRelativeTime）⭐
 ```
 
 ### 推荐算法说明
@@ -195,6 +196,28 @@ interface Recipe {
 4. **样式方案**: Tailwind CSS + CSS 变量系统
 5. **移动端优化**: safe-area-pb, 最小点击区域 44px
 6. **AI 模型**: 阿里云通义千问 (qwen-vl-plus)，OpenAI SDK 兼容模式
+7. **拍照功能**: 手机端点击"拍照更新"同时支持拍照和从相册选择（已移除 capture="environment"）
+
+---
+
+## 🎉 MVP 版本完成标记
+
+**MVP 版本已完成**（2026-04-25）
+
+### 已完成功能清单
+- ✅ 首页：拍照/相册上传食材 + localStorage 持久化 + 相对时间显示
+- ✅ 推荐列表：AI 生成多样化推荐 + 缓存机制（食材变化自动清除）
+- ✅ 详情页：/api/detail 个性化步骤 + 全量食材高亮 + 无高亮小贴士
+- ✅ iOS 原生 UI：纯白背景 + 橙色主题 + 圆形序号 + 骨架屏
+- ✅ 性能优化：推荐列表缓存，避免重复调用大模型节省 Token
+
+### 技术栈
+Next.js (App Router) + Tailwind CSS + TypeScript + 阿里云通义千问 + LocalStorage
+
+### 核心 API
+- `POST /api/vision` — 图片识别食材
+- `POST /api/recommend` — AI 生成多样化菜谱推荐（10道）
+- `POST /api/detail` — AI 生成个性化烹饪步骤
 
 ### 遇到的问题
 - 无
