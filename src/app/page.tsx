@@ -2,8 +2,7 @@
 
 import { useState, useMemo } from "react"
 import Link from "next/link"
-import { ChevronDown, ChevronUp, X, Plus, RefreshCw, Upload } from "lucide-react"
-import { StatusBar } from "@/components/shared/StatusBar"
+import { X, Plus, Snowflake, Camera, ChevronDown } from "lucide-react"
 import { ImageUploader } from "@/components/shared/ImageUploader"
 import { useIngredients } from "@/hooks/useIngredients"
 import { cn } from "@/lib/utils"
@@ -15,33 +14,12 @@ type CategoryKey = "meat" | "vegetable" | "other"
 interface CategoryConfig {
   key: CategoryKey
   label: string
-  bgLight: string
-  tagBg: string
-  tagText: string
 }
 
 const CATEGORIES: CategoryConfig[] = [
-  {
-    key: "meat",
-    label: "肉类海鲜",
-    bgLight: "bg-gradient-to-br from-[#F5DDD8] to-[#F0D0C8]",
-    tagBg: "bg-[#F5DDD8]",
-    tagText: "text-[#B87068]",
-  },
-  {
-    key: "vegetable",
-    label: "蔬菜水果",
-    bgLight: "bg-gradient-to-br from-[#D5E8D5] to-[#C8DFC8]",
-    tagBg: "bg-[#D5E8D5]",
-    tagText: "text-[#6B8E6B]",
-  },
-  {
-    key: "other",
-    label: "调料其他",
-    bgLight: "bg-gradient-to-br from-[#E2D4E6] to-[#D8C8DC]",
-    tagBg: "bg-[#E2D4E6]",
-    tagText: "text-[#8E7B9B]",
-  },
+  { key: "meat", label: "肉类海鲜" },
+  { key: "vegetable", label: "蔬菜水果" },
+  { key: "other", label: "调料其他" },
 ]
 
 // 食材分类映射
@@ -52,54 +30,9 @@ function classifyIngredient(name: string): CategoryKey {
   return "other"
 }
 
-// ─── SVG 冰箱组件 ────────────────────────────────────────────
-function FridgeIllustration({ hasIngredients }: { hasIngredients: boolean }) {
-  return (
-    <div className="relative w-full max-w-xs mx-auto">
-      <svg viewBox="0 0 200 240" className="w-full h-auto" fill="none">
-        {/* 冰箱身体 */}
-        <rect x="30" y="20" width="140" height="200" rx="16" fill="#F5EDE5" stroke="#E0D6CA" strokeWidth="2"/>
-
-        {/* 冰箱门把手 */}
-        <rect x="145" y="90" width="8" height="40" rx="4" fill="#D4C4B0"/>
-        <rect x="145" y="150" width="8" height="30" rx="4" fill="#D4C4B0"/>
-
-        {/* 冰箱门分割线 */}
-        <line x1="30" y1="120" x2="170" y2="120" stroke="#E0D6CA" strokeWidth="2"/>
-
-        {/* 冰箱脚 */}
-        <rect x="50" y="218" width="20" height="8" rx="4" fill="#D4C4B0"/>
-        <rect x="130" y="218" width="20" height="8" rx="4" fill="#D4C4B0"/>
-
-        {/* 冰箱内食物图标（手绘风格） */}
-        {!hasIngredients && (
-          <>
-            {/* 空冰箱提示 - 蔬菜 */}
-            <circle cx="80" cy="80" r="15" fill="#C8DFC8" opacity="0.5"/>
-            <circle cx="110" cy="85" r="12" fill="#F5DDD8" opacity="0.5"/>
-            {/* 空冰箱提示 - 肉类 */}
-            <rect x="75" y="150" width="25" height="18" rx="4" fill="#E2D4E6" opacity="0.4"/>
-            <rect x="110" y="155" width="20" height="14" rx="4" fill="#E2D4E6" opacity="0.4"/>
-          </>
-        )}
-      </svg>
-
-      {/* 食材气泡提示 */}
-      {hasIngredients && (
-        <div className="absolute top-4 right-0 animate-float">
-          <div className="px-3 py-1.5 bg-white rounded-full shadow-md text-xs text-[#9B8E82]">
-            已放入冰箱 ✓
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── 主组件 ──────────────────────────────────────────────────
 export default function HomePage() {
-  const { ingredients, isLoading, add, remove, refresh } = useIngredients()
-  const [isFridgeExpanded, setIsFridgeExpanded] = useState(true)
+  const { ingredients, isLoading, add, remove } = useIngredients()
   const [showUploadTip, setShowUploadTip] = useState(false)
   const [lastIdentified, setLastIdentified] = useState<IngredientItem[] | null>(null)
 
@@ -128,180 +61,148 @@ export default function HomePage() {
   const hasIngredients = ingredients.length > 0
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <StatusBar />
+    <div className="min-h-screen bg-gray-50">
+      {/* 最外层：手机 App 居中宽度 */}
+      <div className="max-w-md mx-auto relative min-h-screen">
 
-      <main className="pb-28 max-w-lg mx-auto px-4">
+        {/* ── 顶部标题区 ─────────────────────────────────────── */}
+        <div className="px-5 pt-8 pb-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-black">我的冰箱</h1>
+              <p className="text-sm text-gray-400 mt-1">食材越准确，推荐越合口味</p>
+            </div>
+          </div>
+        </div>
 
-        {/* ── Hero：冰箱图案 + 上传按钮 ─────────────────────── */}
-        <section className="flex flex-col items-center pt-8 pb-6">
-          {/* 冰箱插画 */}
-          <FridgeIllustration hasIngredients={hasIngredients} />
+        {/* ── 更新卡片 ────────────────────────────────────────── */}
+        <div className="px-5 pb-4">
+          <div className="flex items-center justify-between p-4 border border-gray-200 rounded-2xl bg-white">
+            {/* 左侧：雪花 + 上次更新 */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <Snowflake size={20} className="text-gray-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-black">上次更新</p>
+                <p className="text-xs text-gray-400">2分钟前</p>
+              </div>
+            </div>
+            {/* 右侧：拍照更新按钮 */}
+            <button className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-full text-sm font-medium text-black hover:bg-gray-50 active:bg-gray-100 transition-colors">
+              <Camera size={16} className="text-orange-500" />
+              拍照更新
+            </button>
+          </div>
+        </div>
 
-          {/* 上传食材按钮 - 奶油暖橘磨砂质感 */}
-          <button
-            onClick={() => document.querySelector<HTMLButtonElement>('[data-upload-btn]')?.click()}
-            className="mt-4 px-6 py-3 rounded-[var(--radius-xl)] btn-primary text-sm font-medium tracking-wide flex items-center gap-2"
-          >
-            <Upload size={16} />
-            上传食材
-          </button>
+        {/* ── 食材列表 - 整体包裹在圆角卡片中 ─────────────────── */}
+        <div className="px-5 pb-32">
+          <div className="border border-gray-200 rounded-2xl p-4 bg-white">
 
-          <p className="mt-3 text-sm text-[var(--muted-foreground)] text-caption">
-            拍照或上传，AI 帮你发现美味灵感
-          </p>
+            {/* 标题行 */}
+            <div className="flex items-center justify-between py-2 mb-4">
+              <h2 className="text-base font-semibold text-black">
+                当前食材 <span className="text-orange-500">{ingredients.length}</span> 种
+              </h2>
+              <button className="text-sm text-blue-500 font-medium">编辑</button>
+            </div>
 
+            {/* 空状态 */}
+            {!hasIngredients && !isLoading && (
+              <div className="py-12 text-center">
+                <p className="text-gray-400 text-sm">冰箱里空空如也</p>
+                <p className="text-gray-300 text-xs mt-1">点击上方按钮添加食材</p>
+              </div>
+            )}
+
+            {/* Loading */}
+            {isLoading && (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {/* 分类区块 */}
+            {hasIngredients && !isLoading && (
+              <div className="space-y-5">
+                {CATEGORIES.map((cat) => {
+                  const items = grouped[cat.key]
+                  if (items.length === 0) return null
+                  return (
+                    <div key={cat.key}>
+                      {/* 分类标题 */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-semibold text-gray-500">
+                          {cat.label} ({items.length})
+                        </span>
+                      </div>
+                      {/* 食材横向平铺 - 流式布局 */}
+                      <div className="flex flex-wrap gap-3">
+                        {items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full"
+                          >
+                            <span className="text-sm text-black">{item.name}</span>
+                            <button
+                              onClick={() => remove(item.id)}
+                              className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
+                            >
+                              <X size={10} className="text-gray-500" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* 手动添加 */}
+                <button
+                  onClick={addManualIngredient}
+                  className="w-full py-2.5 flex items-center justify-center gap-1.5 text-sm text-blue-500 font-medium"
+                >
+                  <Plus size={16} />
+                  手动添加食材
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* ── 底部操作区 ──────────────────────────────────────── */}
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 px-5 py-4 safe-area-pb">
           {/* 隐藏的真实上传按钮 */}
           <div className="sr-only">
             <ImageUploader onIngredientsIdentified={handleIngredientsIdentified} />
           </div>
 
-          {/* 成功提示 */}
-          {showUploadTip && lastIdentified && (
-            <div className="mt-4 px-5 py-3 rounded-[var(--radius-lg)] glass-card animate-fade-in">
-              <p className="text-sm text-[var(--primary)] font-medium">
-                已添加：{lastIdentified.map(i => i.name).join("、")}
-              </p>
-            </div>
-          )}
-        </section>
-
-        {/* ── 冰箱区块 ──────────────────────────────────────── */}
-        <section className="mt-4">
-
-          {/* 冰箱容器 - 奶油磨砂质感 */}
-          <div className="rounded-[var(--radius-2xl)] glass-card overflow-hidden">
-
-            {/* 冰箱 Header */}
-            <button
-              onClick={() => setIsFridgeExpanded(!isFridgeExpanded)}
-              className="w-full flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-[rgba(255,255,255,0.5)] transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                {/* 冰箱图标 SVG */}
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                  <rect x="4" y="2" width="20" height="24" rx="4" fill="#F5EDE5" stroke="#D4C4B0" strokeWidth="1.5"/>
-                  <line x1="4" y1="14" x2="24" y2="14" stroke="#D4C4B0" strokeWidth="1.5"/>
-                  <rect x="19" y="6" width="2" height="5" rx="1" fill="#D4C4B0"/>
-                  <rect x="19" y="17" width="2" height="4" rx="1" fill="#D4C4B0"/>
-                </svg>
-                <span className="text-title text-lg text-[var(--foreground)]">
-                  我的冰箱
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--accent-purple)] text-[#8E7B9B]">
-                  {ingredients.length} 种食材
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    refresh()
-                  }}
-                  className="p-2 rounded-full hover:bg-[var(--muted)] transition-colors"
-                  aria-label="刷新"
-                >
-                  <RefreshCw size={16} className="text-[var(--muted-foreground)]" />
-                </button>
-                {isFridgeExpanded ? (
-                  <ChevronUp size={20} className="text-[var(--muted-foreground)]" />
-                ) : (
-                  <ChevronDown size={20} className="text-[var(--muted-foreground)]" />
-                )}
-              </div>
-            </button>
-
-            {/* 冰箱内部：分层展示 */}
-            {isFridgeExpanded && (
-              <div className="px-4 pb-5 space-y-3">
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-10">
-                    <div className="w-7 h-7 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : !hasIngredients ? (
-                  <div className="py-10 text-center">
-                    <svg className="mx-auto mb-3" width="48" height="48" viewBox="0 0 48 48" fill="none">
-                      <rect x="8" y="4" width="32" height="40" rx="6" fill="#F0EBE3" stroke="#E0D6CA" strokeWidth="2"/>
-                      <line x1="8" y1="24" x2="40" y2="24" stroke="#E0D6CA" strokeWidth="2"/>
-                    </svg>
-                    <p className="text-[var(--muted-foreground)] text-sm">冰箱里空空如也</p>
-                    <p className="text-[var(--muted-foreground)] text-xs mt-1 opacity-60">点击上方按钮添加食材</p>
-                  </div>
-                ) : (
-                  CATEGORIES.map((cat) => {
-                    const items = grouped[cat.key]
-                    if (items.length === 0) return null
-                    return (
-                      <div key={cat.key} className={cn("rounded-[var(--radius-lg)] p-4", cat.bgLight)}>
-                        {/* 层标题 */}
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className={cn("text-sm font-medium", cat.tagText)}>
-                            {cat.label}
-                          </span>
-                          <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", cat.tagBg, cat.tagText)}>
-                            {items.length}
-                          </span>
-                        </div>
-                        {/* 食材标签 */}
-                        <div className="flex flex-wrap gap-2">
-                          {items.map((item) => (
-                            <div
-                              key={item.id}
-                              className={cn(
-                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium",
-                                "bg-white/80 text-[var(--foreground)] shadow-sm",
-                                "group transition-all duration-150 hover:bg-white"
-                              )}
-                            >
-                              {item.name}
-                              <button
-                                onClick={() => remove(item.id)}
-                                className="w-5 h-5 rounded-full bg-[var(--muted)] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--destructive)] hover:text-white"
-                                aria-label={`删除 ${item.name}`}
-                              >
-                                <X size={10} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-
-                {/* 手动添加按钮 */}
-                {hasIngredients && (
-                  <button
-                    onClick={addManualIngredient}
-                    className="w-full mt-3 py-3 border-2 border-dashed border-[var(--border)] rounded-[var(--radius-lg)] text-[var(--muted-foreground)] text-sm font-medium hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <Plus size={16} />
-                    手动添加食材
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* ── CTA ───────────────────────────────────────────── */}
-        <section className="mt-6">
+          {/* 主按钮 */}
           <Link
             href="/recommend"
-            className={cn(
-              "flex items-center justify-center gap-2.5 py-4 rounded-[var(--radius-xl)]",
-              "btn-primary text-base font-medium tracking-wide"
-            )}
+            className="flex items-center justify-center gap-2 py-4 bg-orange-500 text-white text-base font-semibold rounded-2xl"
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M10 2C5.5 2 2 5.5 2 10s3.5 8 8 8 8-3.5 8-8-3.5-8-8-8z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
               <path d="M7 10l2.5 2.5L13 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            解锁今日菜品灵感
+            解锁每日做饭灵感
           </Link>
-        </section>
+          <p className="text-center text-xs text-gray-400 mt-2">根据现有食材，推荐适合的菜谱</p>
 
-      </main>
+          {/* 成功提示 */}
+          {showUploadTip && lastIdentified && (
+            <div className="mt-3 px-4 py-2.5 bg-orange-50 border border-orange-100 rounded-xl">
+              <p className="text-sm text-orange-500 font-medium">
+                已添加：{lastIdentified.map(i => i.name).join("、")}
+              </p>
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   )
 }

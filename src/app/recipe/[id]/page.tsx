@@ -3,67 +3,14 @@
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
-import { ArrowLeft, Share2, Heart, Clock, CheckCircle2, Circle, Flame, Sparkles, Loader2 } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Circle, Flame, Loader2, Lightbulb } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { getRecipeById, type Recipe } from "@/lib/recipes"
 import { cn } from "@/lib/utils"
 
-// 预设渐变色组合（低饱和色系）
-const GRADIENTS = [
-  "from-[#F5DDD8] via-[#F0D0C8] to-[#E8C8B8]",
-  "from-[#E2D4E6] via-[#D8C8DC] to-[#D0C0D0]",
-  "from-[#D5E8D5] via-[#C8DFC8] to-[#B8D8B8]",
-  "from-[#E8D4C8] via-[#DEC8B8] to-[#D4BEA8]",
-  "from-[#F0E4D8] via-[#E8D8C8] to-[#DECCB8]",
-]
-
-function getGradientForTitle(title: string): string {
-  let hash = 0
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
-}
-
-// 纯几何图案生成器（代替 emoji）
-function generatePattern(title: string): string {
-  const patterns = [
-    // 圆形组合
-    `<circle cx="50" cy="50" r="30" fill="none" stroke="white" strokeWidth="2" opacity="0.6"/>
-     <circle cx="50" cy="50" r="20" fill="white" opacity="0.2"/>
-     <circle cx="40" cy="45" r="8" fill="white" opacity="0.3"/>`,
-    // 方圆组合
-    `<rect x="25" y="30" width="50" height="40" rx="8" fill="white" opacity="0.2"/>
-     <circle cx="50" cy="50" r="25" fill="white" opacity="0.15"/>`,
-    // 波浪线
-    `<path d="M25 50 Q37 35 50 50 Q62 65 75 50" stroke="white" strokeWidth="2" fill="none" opacity="0.6"/>
-     <path d="M30 60 Q42 45 55 60 Q68 75 80 60" stroke="white" strokeWidth="2" fill="none" opacity="0.4"/>`,
-    // 三角组合
-    `<polygon points="50,25 75,65 25,65" fill="white" opacity="0.2"/>
-     <polygon points="50,35 65,60 35,60" fill="white" opacity="0.15"/>`,
-  ]
-  let hash = 0
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return patterns[Math.abs(hash) % patterns.length]
-}
-
 interface Step {
   order: number
   description: string
-}
-
-// 从 URL 参数构建 AI 菜谱数据
-interface AIGeneratedRecipeData {
-  isAI: true
-  title: string
-  emoji: string
-  mainIngredients: { name: string; amount: string }[]
-  seasonings: { name: string; amount: string }[]
-  cookingTime: number
-  tags: string[]
-  tips?: string
 }
 
 export default function RecipeDetailPage() {
@@ -85,7 +32,7 @@ export default function RecipeDetailPage() {
   const localRecipe = getRecipeById(recipeId)
   const isAIRecipe = recipeId.startsWith("ai-")
 
-  const aiRecipeData = useMemo<AIGeneratedRecipeData | null>(() => {
+  const aiRecipeData = useMemo(() => {
     if (!isAIRecipe || !recipeName) return null
     return {
       isAI: true,
@@ -94,7 +41,7 @@ export default function RecipeDetailPage() {
       mainIngredients: [...availableIngredients, ...missingIngredients].map(name => ({ name, amount: "适量" })),
       seasonings: seasonings.map(name => ({ name, amount: "适量" })),
       cookingTime: 20,
-      tags: ["AI 推荐"],
+      tags: ["简单", "2人份"],
       tips: "根据你冰箱里的食材 AI 智能推荐",
     }
   }, [isAIRecipe, recipeName, emojiParam, availableIngredients, missingIngredients, seasonings])
@@ -109,11 +56,9 @@ export default function RecipeDetailPage() {
   const [isLoadingApi, setIsLoadingApi] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
 
-  // 高亮食材 - 使用奶油暖橘同色系低饱和色
+  // 高亮食材 - 橙色系（全量：主食材 + 调料辅料）
   const highlightIngredients = useCallback(
     (text: string): React.ReactNode => {
-      if (availableIngredients.length === 0) return text
-
       const allIngredients = [
         ...recipe?.mainIngredients.map((i) => i.name) || [],
         ...seasonings,
@@ -134,7 +79,7 @@ export default function RecipeDetailPage() {
           parts.push(
             <span
               key={`${ing}-${idx}`}
-              className="bg-[#F5DDD8] text-[#B87068] px-0.5 rounded"
+              className="bg-orange-50 text-orange-600 px-0.5 rounded"
             >
               {ing}
             </span>
@@ -149,7 +94,7 @@ export default function RecipeDetailPage() {
 
       return parts.length > 0 ? parts : text
     },
-    [availableIngredients, recipe, seasonings]
+    [recipe, seasonings]
   )
 
   const hasFetchedRef = useRef(false)
@@ -210,13 +155,13 @@ export default function RecipeDetailPage() {
 
   if (!recipe) {
     return (
-      <div className="min-h-screen bg-[var(--background)] pb-32">
+      <div className="min-h-screen bg-white pb-32">
         <StatusBar />
-        <main className="max-w-lg mx-auto px-5 py-20 text-center">
-          <p className="text-[var(--muted-foreground)]">菜谱不存在</p>
+        <main className="max-w-md mx-auto px-5 py-20 text-center">
+          <p className="text-gray-400">菜谱不存在</p>
           <Link
             href="/recommend"
-            className="mt-4 inline-block px-6 py-3 rounded-[var(--radius-full)] btn-primary text-sm font-medium"
+            className="mt-4 inline-block px-6 py-3 rounded-full bg-orange-500 text-white text-sm font-medium"
           >
             返回推荐
           </Link>
@@ -229,101 +174,64 @@ export default function RecipeDetailPage() {
   const isIngredientAvailable = (name: string) =>
     availableSet.has(name.toLowerCase()) || availableSet.has(name.replace(/[^\u4e00-\u9fa5]/g, "").toLowerCase())
 
-  const gradient = getGradientForTitle(recipe.title)
-  const pattern = generatePattern(recipe.title)
-
   return (
-    <div className="min-h-screen bg-[var(--background)] pb-16 max-w-md mx-auto">
+    <div className="min-h-screen bg-white pb-16 max-w-md mx-auto">
 
-      {/* Hero Banner - 几何图案代替 emoji */}
-      <div className={cn("relative h-64 overflow-hidden", gradient)}>
-        {/* 几何图案背景 */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-32 h-32 opacity-50" dangerouslySetInnerHTML={{ __html: pattern }} />
-        </div>
-
-        {/* 顶部导航 */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between">
-          <button
-            onClick={() => router.back()}
-            className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center hover:bg-white/50 transition-colors"
-          >
-            <ArrowLeft size={20} className="text-[var(--foreground)]" />
-          </button>
-          <div className="flex gap-2">
-            <button className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center hover:bg-white/50 transition-colors">
-              <Share2 size={18} className="text-[var(--foreground)]" />
-            </button>
-            <button className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center hover:bg-white/50 transition-colors">
-              <Heart size={18} className="text-[var(--foreground)]" />
-            </button>
-          </div>
-        </div>
-
-        {/* 底部标题 */}
-        <div className="absolute bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-black/20 to-transparent">
-          <h1 className="text-2xl font-normal text-title text-white tracking-wide">
-            {recipe.title}
-          </h1>
-          <div className="flex items-center gap-3 mt-2">
-            <div className="flex items-center gap-1.5 text-white/90">
-              <Clock size={14} />
-              <span className="text-sm">{recipe.cookingTime}分钟</span>
-            </div>
-            <div className="flex gap-1.5">
-              {recipe.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-2.5 py-0.5 bg-white/20 backdrop-blur-sm text-white text-xs rounded-full"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* ── 头部区域 ─────────────────────────────────────────── */}
+      <div className="px-4 pt-4 pb-2 flex items-center">
+        <button
+          onClick={() => router.back()}
+          className="w-10 h-10 flex items-center justify-center -ml-2"
+        >
+          <ArrowLeft size={22} className="text-black" />
+        </button>
       </div>
 
-      {/* Content */}
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-5">
+      {/* ── 标题区 ─────────────────────────────────────────── */}
+      <div className="px-5 pb-4">
+        <h1 className="text-2xl font-bold text-black leading-tight">
+          {recipe.title}
+        </h1>
+        <p className="text-sm text-gray-400 mt-1">
+          {recipe.cookingTime}分钟 · {recipe.tags[0] || "简单"} · 2人份
+        </p>
+      </div>
 
-        {/* 食材清单模块 */}
+      {/* Content - 直接从标题区紧跟下来，无配图 */}
+      <main className="px-5 space-y-5">
+
+        {/* ── 食材清单 ───────────────────────────────────────── */}
         <section>
-          <h2 className="text-lg font-medium text-[var(--foreground)] mb-3 text-title">
+          <h2 className="text-lg font-bold text-black pb-3 border-b border-gray-100">
             食材清单
           </h2>
 
           {/* 主食材 */}
-          <div className="rounded-[var(--radius-lg)] p-4 glass-card">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 rounded-full bg-[#F5DDD8] flex items-center justify-center">
-                <Flame size={14} className="text-[#B87068]" />
+          <div className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center">
+                <Flame size={12} className="text-orange-500" />
               </div>
-              <span className="font-medium text-[#B87068]">
-                主食材 ({recipe.mainIngredients.length})
+              <span className="text-sm font-semibold text-black">
+                主食材
               </span>
             </div>
-            <div className="space-y-2.5">
+            <div className="space-y-0">
               {recipe.mainIngredients.map((ing, i) => {
                 const available = isIngredientAvailable(ing.name)
                 return (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className={available ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}>
+                  <div key={i} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-b-0">
+                    <div className="flex items-center gap-2">
                       {available ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <CheckCircle2 size={14} className="text-[#6B8E6B]" />
-                          {ing.name}
-                        </span>
+                        <CheckCircle2 size={16} className="text-green-500 flex-shrink-0" />
                       ) : (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Circle size={14} className="text-[var(--muted)]" />
-                          {ing.name}
-                        </span>
+                        <Circle size={16} className="text-gray-300 flex-shrink-0" />
                       )}
-                    </span>
-                    <span className={available ? "text-sm text-[#6B8E6B]" : "text-sm text-[var(--muted-foreground)]"}>
-                      {ing.amount}
-                    </span>
+                      <span className={available ? "text-sm text-black" : "text-sm text-gray-400"}>
+                        {ing.name}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-400">{ing.amount}</span>
                   </div>
                 )
               })}
@@ -331,32 +239,32 @@ export default function RecipeDetailPage() {
           </div>
 
           {/* 调料辅料 */}
-          <div className="rounded-[var(--radius-lg)] p-4 mt-3 glass-card" style={{ background: 'linear-gradient(135deg, rgba(226,212,230,0.4) 0%, rgba(216,200,220,0.3) 100%)' }}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 rounded-full bg-[#E2D4E6] flex items-center justify-center">
-                <Circle size={14} className="text-[#8E7B9B]" />
+          <div className="py-3 border-t border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                <Circle size={12} className="text-gray-400" />
               </div>
-              <span className="font-medium text-[#8E7B9B]">
-                调料与辅料 ({recipe.seasonings.length})
+              <span className="text-sm font-semibold text-black">
+                调料与辅料
               </span>
             </div>
-            <div className="space-y-2.5">
+            <div className="space-y-0">
               {recipe.seasonings.map((ing, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-[var(--muted-foreground)]">{ing.name}</span>
-                  <span className="text-sm text-[var(--muted-foreground)]">{ing.amount}</span>
+                <div key={i} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-b-0">
+                  <span className="text-sm text-gray-500">{ing.name}</span>
+                  <span className="text-sm text-gray-400">{ing.amount}</span>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* AI 菜谱步骤模块 - 奶杏裸色基底 + 轻微渐变 */}
+        {/* ── 做法步骤 ───────────────────────────────────────── */}
         <section>
-          <h2 className="text-lg font-medium text-[var(--foreground)] mb-3 text-title">
+          <h2 className="text-lg font-bold text-black pb-3 border-b border-gray-100">
             做法步骤
             {isLoadingApi && (
-              <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-normal text-[var(--primary)]">
+              <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-normal text-orange-500">
                 <Loader2 size={14} className="animate-spin" />
                 AI 生成中...
               </span>
@@ -364,96 +272,79 @@ export default function RecipeDetailPage() {
           </h2>
 
           {streamError ? (
-            <div className="rounded-[var(--radius-lg)] p-4 glass-card border border-[var(--destructive)]/20">
+            <div className="py-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
-                <p className="text-[var(--destructive)] text-sm flex-1">{streamError}</p>
+                <p className="text-sm text-red-500 flex-1">{streamError}</p>
                 <button
                   onClick={() => window.location.reload()}
-                  className="ml-3 px-4 py-1.5 bg-[var(--destructive)]/10 text-[var(--destructive)] text-xs font-medium rounded-full hover:bg-[var(--destructive)]/20 transition-colors"
+                  className="ml-3 px-4 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-full"
                 >
                   重试
                 </button>
               </div>
             </div>
           ) : streamingSteps.length > 0 ? (
-            <div className="rounded-[var(--radius-lg)] p-5 glass-card space-y-5">
+            <div className="py-4 space-y-4">
               {streamingSteps.map((step) => (
-                <div key={step.order} className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#F5DDD8] flex items-center justify-center">
-                    <span className="text-sm font-medium text-[#B87068]">{step.order}</span>
+                <div key={step.order} className="flex items-start gap-3">
+                  {/* 圆形序号徽章 */}
+                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                    {step.order}
                   </div>
-                  <p className="text-[var(--foreground)] leading-relaxed pt-1">
+                  <p className="text-sm text-black leading-relaxed pt-0.5">
                     {highlightIngredients(step.description)}
                   </p>
                 </div>
               ))}
             </div>
           ) : isLoadingApi ? (
-            <div className="rounded-[var(--radius-lg)] p-5 glass-card">
-              <div className="space-y-5">
+            <div className="py-8">
+              <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#F5DDD8] flex items-center justify-center">
-                      <span className="text-sm font-medium text-[#B87068]">{i}</span>
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                      {i}
                     </div>
-                    <div className="flex-1 pt-1">
-                      <div className="h-4 bg-[var(--muted)] rounded animate-pulse w-full"/>
-                      <div className="h-4 bg-[var(--muted)] rounded animate-pulse w-3/4 mt-2" style={{ animationDelay: `${i * 100}ms` }}/>
+                    <div className="flex-1 pt-0.5">
+                      <div className="h-4 bg-gray-100 rounded animate-pulse w-full"/>
+                      <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4 mt-2" style={{ animationDelay: `${i * 100}ms` }}/>
                     </div>
                   </div>
                 ))}
               </div>
-              {/* 打字机光标 */}
+              {/* 打字机效果 */}
               <div className="mt-4 flex items-center gap-2">
-                <Loader2 size={16} className="text-[var(--primary)] animate-spin" />
-                <span className="text-sm text-[var(--muted-foreground)]">{displayedText}</span>
-                <span className="w-2 h-4 bg-[var(--primary)] animate-pulse"/>
+                <Loader2 size={14} className="text-orange-500 animate-spin" />
+                <span className="text-xs text-gray-400">{displayedText}</span>
+                <span className="w-2 h-4 bg-orange-500 animate-pulse"/>
               </div>
             </div>
           ) : (
-            <div className="rounded-[var(--radius-lg)] p-5 glass-card text-center text-[var(--muted-foreground)]">
+            <div className="py-8 text-center text-sm text-gray-400">
               正在加载步骤...
             </div>
           )}
         </section>
 
-        {/* 做饭小贴士模块 - 淡奶绿渐变区分 */}
-        {isAIRecipe ? (
-          aiTips && (
-            <section>
-              <h2 className="text-lg font-medium text-[var(--foreground)] mb-3 text-title">
-                小贴士
-              </h2>
-              <div className="rounded-[var(--radius-lg)] p-5 glass-card" style={{ background: 'linear-gradient(135deg, rgba(213,232,213,0.5) 0%, rgba(200,223,200,0.4) 100%)' }}>
-                <div className="flex items-start gap-3">
-                  <Sparkles size={18} className="text-[#5B7E5B] mt-0.5 flex-shrink-0"/>
-                  <p className="text-[#5B7E5B] text-sm leading-relaxed">
-                    {highlightIngredients(aiTips)}
+        {/* ── 小贴士 - 浅橙色背景 ─────────────────────────────── */}
+        {(isAIRecipe ? aiTips : recipe.tips) && (
+          <section className="pb-6">
+            <div className="rounded-xl bg-orange-50 p-4">
+              <div className="flex items-start gap-2">
+                <Lightbulb size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-semibold text-orange-700 mb-1">小贴士</h3>
+                  <p className="text-sm text-gray-800 leading-relaxed">
+                    {isAIRecipe ? aiTips : recipe.tips}
                   </p>
                 </div>
               </div>
-            </section>
-          )
-        ) : (
-          recipe.tips && (
-            <section>
-              <h2 className="text-lg font-medium text-[var(--foreground)] mb-3 text-title">
-                小贴士
-              </h2>
-              <div className="rounded-[var(--radius-lg)] p-5 glass-card" style={{ background: 'linear-gradient(135deg, rgba(213,232,213,0.5) 0%, rgba(200,223,200,0.4) 100%)' }}>
-                <div className="flex items-start gap-3">
-                  <Sparkles size={18} className="text-[#5B7E5B] mt-0.5 flex-shrink-0"/>
-                  <p className="text-[#5B7E5B] text-sm leading-relaxed">
-                    {highlightIngredients(recipe.tips)}
-                  </p>
-                </div>
-              </div>
-            </section>
-          )
+            </div>
+          </section>
         )}
 
         {/* 底部留白 */}
-        <div className="h-8"/>
+        <div className="h-4" />
 
       </main>
     </div>

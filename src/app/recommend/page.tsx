@@ -2,47 +2,11 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat, ArrowLeft, Sparkles } from "lucide-react"
+import { Search, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat, ArrowLeft } from "lucide-react"
 import { StatusBar } from "@/components/shared/StatusBar"
 import { getRecommendations, type Recommendation } from "@/lib/recommendApi"
 import { getIngredients } from "@/lib/storage"
 import { cn } from "@/lib/utils"
-
-// 预设渐变色组合（低饱和奶油暖橘色系）
-const GRADIENTS = [
-  "from-[#F5DDD8] via-[#F0D0C8] to-[#E8C8B8]",
-  "from-[#E2D4E6] via-[#D8C8DC] to-[#D0C0D0]",
-  "from-[#D5E8D5] via-[#C8DFC8] to-[#B8D8B8]",
-  "from-[#E8D4C8] via-[#DEC8B8] to-[#D4BEA8]",
-  "from-[#F0E4D8] via-[#E8D8C8] to-[#DECCB8]",
-  "from-[#E4D8E8] via-[#D8D0E0] to-[#D0C8D8]",
-  "from-[#D8E8E4] via-[#C8E0D8] to-[#C0D8D0]",
-]
-
-function getGradientForTitle(title: string): string {
-  let hash = 0
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
-}
-
-// 无 emoji 的菜谱卡片 - 用纯色块代替
-function RecipeCardGraphic({ title, gradient }: { title: string; gradient: string }) {
-  // 用食材相关的几何图形组合代替 emoji
-  return (
-    <div className={cn("relative w-full h-full flex items-center justify-center", gradient)}>
-      {/* 抽象几何图案 - 手绘风格 */}
-      <svg viewBox="0 0 100 100" className="w-24 h-24 opacity-60">
-        <circle cx="50" cy="50" r="35" fill="none" stroke="white" strokeWidth="2" strokeDasharray="4 3"/>
-        <circle cx="50" cy="50" r="25" fill="white" fillOpacity="0.2"/>
-        <circle cx="35" cy="40" r="8" fill="white" fillOpacity="0.4"/>
-        <circle cx="60" cy="55" r="6" fill="white" fillOpacity="0.3"/>
-        <rect x="40" y="30" width="15" height="10" rx="3" fill="white" fillOpacity="0.3" transform="rotate(15 47 35)"/>
-      </svg>
-    </div>
-  )
-}
 
 export default function RecommendPage() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
@@ -50,8 +14,8 @@ export default function RecommendPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedMethod, setSelectedMethod] = useState<string>("全部")
   const [userIngredients, setUserIngredients] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
 
-  // 筛选分类 - 低饱和色块胶囊
   const cookingMethods = ["全部", "快手菜", "家常菜", "蒸煮", "炒制"]
 
   const fetchRecommendations = async () => {
@@ -98,102 +62,89 @@ export default function RecommendPage() {
         })
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <StatusBar />
+    <div className="min-h-screen bg-gray-50">
+      {/* 最外层：手机 App 居中宽度 */}
+      <div className="max-w-md mx-auto relative min-h-screen">
 
       {/* Back Button */}
-      <div className="px-5 py-3">
+      <div className="px-5 pt-8 pb-1">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-orange-500 transition-colors"
         >
           <ArrowLeft size={18} />
-          返回冰箱
+          <span>返回冰箱</span>
         </Link>
       </div>
 
       <main className="pb-8 max-w-lg mx-auto">
 
-        {/* Sticky Header */}
-        <div className="sticky top-14 z-30 bg-[var(--background)]/90 backdrop-blur-md">
-
-          {/* 标题区 - 圆润复古字体 */}
-          <div className="px-5 pt-2 pb-4">
-            <h1 className="text-2xl font-normal text-title text-[var(--foreground)] tracking-wide">
-              今日推荐
-            </h1>
-            <p className="text-sm text-[var(--muted-foreground)] mt-1">根据你的冰箱量身定制</p>
-          </div>
-
-          {/* 搜索栏 - 奶油磨砂质感 */}
-          <div className="flex items-center gap-3 px-5 pb-3">
-            <div className="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-[var(--radius-xl)] glass-card">
-              <Search size={16} className="text-[var(--muted-foreground)]" />
-              <input
-                type="text"
-                placeholder="搜索菜谱..."
-                className="flex-1 bg-transparent outline-none text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]"
-              />
-            </div>
-            <button
-              onClick={fetchRecommendations}
-              className="p-3 rounded-[var(--radius-lg)] glass-card hover:bg-white/80 transition-colors"
-            >
-              <RefreshCw size={18} className={cn("text-[var(--muted-foreground)]", isLoading && "animate-spin")} />
-            </button>
-          </div>
-
-          {/* 筛选胶囊 - 低饱和色块 */}
-          <div className="flex gap-2.5 px-5 pb-5 overflow-x-auto scrollbar-hide">
-            {cookingMethods.map((method) => (
-              <button
-                key={method}
-                onClick={() => setSelectedMethod(method)}
-                className={cn(
-                  "px-4 py-2 rounded-[var(--radius-full)] text-sm font-medium whitespace-nowrap transition-all",
-                  selectedMethod === method
-                    ? "tag-active"
-                    : "bg-white/60 text-[var(--muted-foreground)] hover:bg-white/80"
-                )}
-              >
-                {method}
-              </button>
-            ))}
-          </div>
+        {/* ── 标题区 ─────────────────────────────────────────── */}
+        <div className="px-5 pt-1 pb-3">
+          <h1 className="text-2xl font-bold text-black">今日推荐</h1>
+          <p className="text-sm text-gray-400 mt-0.5">根据你的冰箱量身定制</p>
         </div>
 
-        {/* Content */}
-        <div className="px-4 space-y-5">
+        {/* ── 搜索框 ─────────────────────────────────────────── */}
+        <div className="flex items-center gap-3 px-5 pb-4">
+          <div className="flex-1 flex items-center gap-2.5 px-4 py-3 bg-gray-100 rounded-full">
+            <Search size={16} className="text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索菜谱..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent outline-none text-sm text-black placeholder:text-gray-400"
+            />
+          </div>
+          <button
+            onClick={fetchRecommendations}
+            className="p-3 bg-gray-100 rounded-full hover:bg-gray-200 active:bg-gray-300 transition-colors"
+          >
+            <RefreshCw size={18} className={cn("text-gray-500", isLoading && "animate-spin")} />
+          </button>
+        </div>
 
-          {/* User Ingredients Summary - 淡奶绿渐变 */}
-          {userIngredients.length > 0 && (
-            <div className="bg-gradient-to-r from-[#D5E8D5] to-[#C8DFC8] rounded-[var(--radius-lg)] p-4">
-              <p className="text-sm text-[#5B7E5B] font-medium flex items-center gap-2">
-                <Sparkles size={14} />
-                根据「{userIngredients.slice(0, 3).join("、")}{userIngredients.length > 3 ? "..." : ""}」为你推荐
-              </p>
-            </div>
-          )}
+        {/* ── 横向分类滚动 (Tabs) ─────────────────────────────── */}
+        <div className="flex gap-2.5 px-5 pb-4 overflow-x-auto scrollbar-hide">
+          {cookingMethods.map((method) => (
+            <button
+              key={method}
+              onClick={() => setSelectedMethod(method)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all",
+                selectedMethod === method
+                  ? "bg-orange-500 text-white"
+                  : "text-gray-500 bg-transparent"
+              )}
+            >
+              {method}
+            </button>
+          ))}
+        </div>
+
+        {/* ── 内容区 ─────────────────────────────────────────── */}
+        <div className="px-5">
 
           {/* Loading State */}
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-28">
-              <div className="w-12 h-12 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin"/>
-              <p className="mt-5 text-sm text-[var(--muted-foreground)]">正在为你计算最佳推荐...</p>
+              <div className="w-12 h-12 rounded-full border-2 border-orange-500 border-t-transparent animate-spin"/>
+              <p className="mt-5 text-sm text-gray-400">正在为你计算最佳推荐...</p>
             </div>
           )}
 
           {/* Error State */}
           {!isLoading && error && (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="w-16 h-16 rounded-[var(--radius-xl)] bg-[var(--muted)] flex items-center justify-center mb-4">
-                <ChefHat size={28} className="text-[var(--muted-foreground)] opacity-50" />
+              <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
+                <ChefHat size={28} className="text-gray-400 opacity-50" />
               </div>
-              <p className="text-sm text-[var(--muted-foreground)] px-8">{error}</p>
+              <p className="text-sm text-gray-400 px-8">{error}</p>
               {userIngredients.length === 0 && (
                 <Link
                   href="/"
-                  className="mt-6 px-6 py-3 rounded-[var(--radius-full)] btn-primary text-sm font-medium shadow-md"
+                  className="mt-6 px-6 py-3 rounded-full bg-orange-500 text-white text-sm font-medium"
                 >
                   去添加食材
                 </Link>
@@ -204,88 +155,69 @@ export default function RecommendPage() {
           {/* Empty State */}
           {!isLoading && !error && filteredRecommendations.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <svg width="64" height="64" viewBox="0 0 64 64" fill="none" className="opacity-30">
-                <rect x="12" y="8" width="40" height="48" rx="8" fill="var(--muted)"/>
-                <line x1="12" y1="28" x2="52" y2="28" stroke="var(--foreground)" strokeWidth="2"/>
-              </svg>
-              <p className="mt-4 text-sm text-[var(--muted-foreground)]">暂无符合条件的推荐</p>
+              <p className="text-sm text-gray-400">暂无符合条件的推荐</p>
             </div>
           )}
 
-          {/* Recipe List - 2列瀑布流 */}
+          {/* Recipe List - 极简纵向列表 */}
           {!isLoading && !error && filteredRecommendations.length > 0 && (
-            <>
-              <div className="flex items-center justify-between px-1 pt-2">
-                <h2 className="text-base font-medium text-[var(--foreground)]">
-                  为你推荐 <span className="text-[var(--muted-foreground)]">({filteredRecommendations.length})</span>
-                </h2>
-              </div>
+            <div>
+              {filteredRecommendations.map((recipe) => {
+                const matchPercent = Math.round(recipe.matchingScore * 100)
 
-              <div className="masonry-grid">
-                {filteredRecommendations.map((recipe) => {
-                  const gradient = getGradientForTitle(recipe.title)
-                  const matchPercent = Math.round(recipe.matchingScore * 100)
+                return (
+                  <Link
+                    key={recipe.recipeId}
+                    href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&emoji=${encodeURIComponent(recipe.emoji)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&missing=${encodeURIComponent(recipe.missingMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
+                    className="flex items-center justify-between py-4 border-b border-gray-100 active:bg-gray-50"
+                  >
+                    {/* 左侧内容 */}
+                    <div className="flex-1 pr-4">
+                      {/* 第一行：菜名 */}
+                      <h3 className="text-base font-semibold text-black leading-tight">
+                        {recipe.title}
+                      </h3>
 
-                  return (
-                    <Link
-                      key={recipe.recipeId}
-                      href={`/recipe/${recipe.recipeId}?title=${encodeURIComponent(recipe.title)}&emoji=${encodeURIComponent(recipe.emoji)}&available=${encodeURIComponent(recipe.availableMainIngredients.join(","))}&missing=${encodeURIComponent(recipe.missingMainIngredients.join(","))}&seasonings=${encodeURIComponent(recipe.seasonings.join(","))}`}
-                      className="block rounded-[var(--radius-xl)] glass-card overflow-hidden hover:shadow-lg transition-all duration-300 animate-fade-in"
-                    >
-                      {/* 卡片头部 - 渐变色块 + 几何图案 */}
-                      <div className={cn("relative h-40", gradient)}>
-                        <RecipeCardGraphic title={recipe.title} gradient={gradient} />
-
-                        {/* 时间标签 */}
-                        <div className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/70 backdrop-blur-sm">
-                          <Clock size={11} className="text-[var(--foreground)]" />
-                          <span className="text-xs font-medium text-[var(--foreground)]">{recipe.cookingTime}分钟</span>
-                        </div>
-
-                        {/* 匹配度标签 */}
-                        <div className={cn(
-                          "absolute bottom-3 left-3 px-3 py-1 rounded-full text-xs font-medium",
-                          matchPercent >= 80 ? "match-high" : matchPercent >= 60 ? "match-medium" : "match-low"
-                        )}>
-                          {matchPercent}% 匹配
-                        </div>
+                      {/* 第二行：匹配度 · 时间 · 烹饪方式 */}
+                      <div className="flex items-center gap-1.5 mt-1.5 text-xs">
+                        <span className="text-orange-500 font-medium">{matchPercent}%</span>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-gray-400">{recipe.cookingTime}分钟</span>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-gray-400">{recipe.cookingMethod}</span>
                       </div>
 
-                      {/* 卡片内容 */}
-                      <div className="p-4">
-                        <h3 className="text-base font-medium text-[var(--foreground)] leading-snug">
-                          {recipe.title}
-                        </h3>
-
-                        {/* 可用性状态 */}
-                        <div className="mt-3 pt-3 border-t border-[var(--border)]/50">
-                          {recipe.isAllAvailable ? (
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-5 h-5 rounded-full bg-[var(--accent-green)] flex items-center justify-center">
-                                <CheckCircle2 size={11} className="text-[#5B7E5B]" />
-                              </div>
-                              <span className="text-xs font-medium text-[#5B7E5B]">主食材已备齐</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-5 h-5 rounded-full bg-[var(--muted)] flex items-center justify-center">
-                                <AlertCircle size={11} className="text-[var(--muted-foreground)]" />
-                              </div>
-                              <span className="text-xs text-[var(--muted-foreground)]">
-                                缺少 {recipe.missingMainIngredients.length} 种
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                      {/* 第三行：食材状态 */}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {recipe.isAllAvailable ? (
+                          <div className="flex items-center gap-1">
+                            <CheckCircle2 size={12} className="text-green-500" />
+                            <span className="text-xs text-green-600 font-medium">食材已备齐</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-orange-500 font-medium">
+                              缺少: {recipe.missingMainIngredients.join("、")}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            </>
+                    </div>
+
+                    {/* 右侧：箭头 */}
+                    <div className="flex-shrink-0">
+                      <svg width="8" height="14" viewBox="0 0 8 14" fill="none" className="text-gray-300">
+                        <path d="M1 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
           )}
         </div>
       </main>
+      </div>
     </div>
   )
 }
