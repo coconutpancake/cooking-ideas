@@ -4,8 +4,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { ArrowLeft, CheckCircle2, Circle, Flame, Loader2, Lightbulb } from "lucide-react"
-import { StatusBar } from "@/components/shared/StatusBar"
-import { getRecipeById, type Recipe } from "@/lib/recipes"
+import { getIngredients } from "@/lib/storage"
 import { cn } from "@/lib/utils"
 
 interface Step {
@@ -25,46 +24,86 @@ export default function RecipeDetailPage() {
   const recipeName = searchParams.get("title") || ""
   const emojiParam = searchParams.get("emoji") || ""
 
-  const availableIngredients = useMemo(() => availableStr ? availableStr.split(",").filter(Boolean) : [], [availableStr])
-  const missingIngredients = useMemo(() => missingStr ? missingStr.split(",").filter(Boolean) : [], [missingStr])
-  const seasonings = useMemo(() => seasoningsStr ? seasoningsStr.split(",").filter(Boolean) : [], [seasoningsStr])
+  // 从 URL 参数解析已有食材列表
+  const availableIngredients = useMemo(
+    () => availableStr.split(",").filter(Boolean),
+    [availableStr]
+  )
+  const missingIngredients = useMemo(
+    () => missingStr.split(",").filter(Boolean),
+    [missingStr]
+  )
+  const seasonings = useMemo(
+    () => seasoningsStr.split(",").filter(Boolean),
+    [seasoningsStr]
+  )
 
-  const localRecipe = getRecipeById(recipeId)
+  // 判断是否为 AI 菜谱
   const isAIRecipe = recipeId.startsWith("ai-")
 
-  const aiRecipeData = useMemo(() => {
-    if (!isAIRecipe || !recipeName) return null
+  // 从 localStorage 读取真实用户食材，用于高亮对比
+  const userIngredients = useMemo(() => {
+    return getIngredients().map((i) => i.name)
+  }, [])
+
+  // 真实食材 Set（用于判断是否已有）
+  const userIngredientsSet = useMemo(
+    () => new Set(userIngredients.map((i) => i.toLowerCase())),
+    [userIngredients]
+  )
+
+  // 判断某食材是否在用户冰箱中
+  const isUserHasIngredient = useCallback(
+    (name: string): boolean => {
+      const normalized = name.toLowerCase()
+      return (
+        userIngredientsSet.has(normalized) ||
+        userIngredientsSet.has(normalized.replace(/[^\u4e00-\u9fa5]/g, ""))
+      )
+    },
+    [userIngredientsSet]
+  )
+
+  // 完整食材列表（主食材 + 调料，用于全量高亮）
+  const allIngredientsForHighlight = useMemo(
+    () => [
+      ...availableIngredients,
+      ...missingIngredients,
+      ...seasonings,
+    ],
+    [availableIngredients, missingIngredients, seasonings]
+  )
+
+  // 构建菜谱数据（来自 URL 参数）
+  const recipeData = useMemo(() => {
+    if (!recipeName) return null
     return {
-      isAI: true,
       title: decodeURIComponent(recipeName),
       emoji: decodeURIComponent(emojiParam) || "🍽️",
-      mainIngredients: [...availableIngredients, ...missingIngredients].map(name => ({ name, amount: "适量" })),
-      seasonings: seasonings.map(name => ({ name, amount: "适量" })),
+      mainIngredients: [...availableIngredients, ...missingIngredients].map(
+        (name) => ({ name, amount: "适量" })
+      ),
+      seasonings: seasonings.map((name) => ({ name, amount: "适量" })),
       cookingTime: 20,
       tags: ["简单", "2人份"],
-      tips: "根据你冰箱里的食材 AI 智能推荐",
     }
-  }, [isAIRecipe, recipeName, emojiParam, availableIngredients, missingIngredients, seasonings])
-
-  const recipe = useMemo(() => aiRecipeData || localRecipe, [aiRecipeData, localRecipe])
+  }, [recipeName, emojiParam, availableIngredients, missingIngredients, seasonings])
 
   // 步骤状态
-  const [streamingSteps, setStreamingSteps] = useState<Step[]>([])
+  const [steps, setSteps] = useState<Step[]>([])
   const [displayedText, setDisplayedText] = useState("")
-  const [aiTips, setAiTips] = useState<string | undefined>(undefined)
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [tips, setTips] = useState<string | undefined>(undefined)
   const [isLoadingApi, setIsLoadingApi] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
 
-  // 高亮食材 - 橙色系（全量：主食材 + 调料辅料）
+  // 高亮食材 - 全量（主食材 + 调料）
   const highlightIngredients = useCallback(
     (text: string): React.ReactNode => {
-      const allIngredients = [
-        ...recipe?.mainIngredients.map((i) => i.name) || [],
-        ...seasonings,
-      ]
+      if (allIngredientsForHighlight.length === 0) return text
 
-      const sorted = [...new Set(allIngredients)].sort((a, b) => b.length - a.length)
+      const sorted = [...new Set(allIngredientsForHighlight)].sort(
+        (a, b) => b.length - a.length
+      )
 
       const parts: React.ReactNode[] = []
       let remaining = text
@@ -94,38 +133,28 @@ export default function RecipeDetailPage() {
 
       return parts.length > 0 ? parts : text
     },
-    [recipe, seasonings]
+    [allIngredientsForHighlight]
   )
 
   const hasFetchedRef = useRef(false)
 
+  // 调用 /api/detail 获取真实步骤
   useEffect(() => {
     if (!recipeName || hasFetchedRef.current) return
 
+    hasFetchedRef.current = true
+    setIsLoadingApi(true)
+    setStreamError(null)
+
     const fetchSteps = async () => {
-      hasFetchedRef.current = true
-
       try {
-        setStreamError(null)
-
-        if (recipe?.steps && recipe.steps.length > 0) {
-          const text = recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n")
-          setStreamingSteps(recipe.steps)
-          setDisplayedText(text)
-          setIsStreaming(false)
-          return
-        }
-
-        setIsLoadingApi(true)
-        setIsStreaming(true)
-
         const response = await fetch("/api/detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            recipeName: recipeName || recipe?.title,
-            mainIngredients: recipe?.mainIngredients.map((i) => i.name) || [],
-            availableIngredients,
+            recipeName: decodeURIComponent(recipeName),
+            mainIngredients: [...availableIngredients, ...missingIngredients],
+            availableIngredients: userIngredients,
           }),
         })
 
@@ -136,27 +165,28 @@ export default function RecipeDetailPage() {
         const data = await response.json()
 
         if (data.success && data.steps) {
-          setStreamingSteps(data.steps)
+          setSteps(data.steps)
           setDisplayedText(data.fullText || "")
-          setAiTips(data.tips)
+          if (data.tips) setTips(data.tips)
         } else if (data.error) {
           throw new Error(data.error)
         }
       } catch (error) {
-        setStreamError(error instanceof Error ? error.message : "获取步骤失败，请重试")
+        setStreamError(
+          error instanceof Error ? error.message : "获取步骤失败，请重试"
+        )
       } finally {
-        setIsStreaming(false)
         setIsLoadingApi(false)
       }
     }
 
     fetchSteps()
-  }, [recipeName, recipe, availableIngredients])
+  }, [recipeName, userIngredients])
 
-  if (!recipe) {
+  // 无菜谱数据时
+  if (!recipeData) {
     return (
       <div className="min-h-screen bg-white pb-32">
-        <StatusBar />
         <main className="max-w-md mx-auto px-5 py-20 text-center">
           <p className="text-gray-400">菜谱不存在</p>
           <Link
@@ -169,10 +199,6 @@ export default function RecipeDetailPage() {
       </div>
     )
   }
-
-  const availableSet = new Set(availableIngredients.map((i) => i.toLowerCase()))
-  const isIngredientAvailable = (name: string) =>
-    availableSet.has(name.toLowerCase()) || availableSet.has(name.replace(/[^\u4e00-\u9fa5]/g, "").toLowerCase())
 
   return (
     <div className="min-h-screen bg-white pb-16 max-w-md mx-auto">
@@ -190,14 +216,14 @@ export default function RecipeDetailPage() {
       {/* ── 标题区 ─────────────────────────────────────────── */}
       <div className="px-5 pb-4">
         <h1 className="text-2xl font-bold text-black leading-tight">
-          {recipe.title}
+          {recipeData.title}
         </h1>
         <p className="text-sm text-gray-400 mt-1">
-          {recipe.cookingTime}分钟 · {recipe.tags[0] || "简单"} · 2人份
+          {recipeData.cookingTime}分钟 · {recipeData.tags[0]} · 2人份
         </p>
       </div>
 
-      {/* Content - 直接从标题区紧跟下来，无配图 */}
+      {/* Content */}
       <main className="px-5 space-y-5">
 
         {/* ── 食材清单 ───────────────────────────────────────── */}
@@ -217,17 +243,30 @@ export default function RecipeDetailPage() {
               </span>
             </div>
             <div className="space-y-0">
-              {recipe.mainIngredients.map((ing, i) => {
-                const available = isIngredientAvailable(ing.name)
+              {recipeData.mainIngredients.map((ing, i) => {
+                const hasIt = isUserHasIngredient(ing.name)
                 return (
-                  <div key={i} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-b-0">
+                  <div
+                    key={i}
+                    className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-b-0"
+                  >
                     <div className="flex items-center gap-2">
-                      {available ? (
-                        <CheckCircle2 size={16} className="text-green-500 flex-shrink-0" />
+                      {hasIt ? (
+                        <CheckCircle2
+                          size={16}
+                          className="text-green-500 flex-shrink-0"
+                        />
                       ) : (
-                        <Circle size={16} className="text-gray-300 flex-shrink-0" />
+                        <Circle
+                          size={16}
+                          className="text-gray-300 flex-shrink-0"
+                        />
                       )}
-                      <span className={available ? "text-sm text-black" : "text-sm text-gray-400"}>
+                      <span
+                        className={
+                          hasIt ? "text-sm text-black" : "text-sm text-gray-400"
+                        }
+                      >
                         {ing.name}
                       </span>
                     </div>
@@ -249,8 +288,11 @@ export default function RecipeDetailPage() {
               </span>
             </div>
             <div className="space-y-0">
-              {recipe.seasonings.map((ing, i) => (
-                <div key={i} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-b-0">
+              {recipeData.seasonings.map((ing, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-b-0"
+                >
                   <span className="text-sm text-gray-500">{ing.name}</span>
                   <span className="text-sm text-gray-400">{ing.amount}</span>
                 </div>
@@ -261,10 +303,10 @@ export default function RecipeDetailPage() {
 
         {/* ── 做法步骤 ───────────────────────────────────────── */}
         <section>
-          <h2 className="text-lg font-bold text-black pb-3 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-black pb-3 border-b border-gray-100 flex items-center gap-2">
             做法步骤
             {isLoadingApi && (
-              <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-normal text-orange-500">
+              <span className="inline-flex items-center gap-1.5 text-xs font-normal text-orange-500">
                 <Loader2 size={14} className="animate-spin" />
                 AI 生成中...
               </span>
@@ -283,9 +325,9 @@ export default function RecipeDetailPage() {
                 </button>
               </div>
             </div>
-          ) : streamingSteps.length > 0 ? (
+          ) : steps.length > 0 ? (
             <div className="py-4 space-y-4">
-              {streamingSteps.map((step) => (
+              {steps.map((step) => (
                 <div key={step.order} className="flex items-start gap-3">
                   {/* 圆形序号徽章 */}
                   <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
@@ -298,6 +340,7 @@ export default function RecipeDetailPage() {
               ))}
             </div>
           ) : isLoadingApi ? (
+            /* 骨架屏加载态 */
             <div className="py-8">
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -306,18 +349,26 @@ export default function RecipeDetailPage() {
                       {i}
                     </div>
                     <div className="flex-1 pt-0.5">
-                      <div className="h-4 bg-gray-100 rounded animate-pulse w-full"/>
-                      <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4 mt-2" style={{ animationDelay: `${i * 100}ms` }}/>
+                      <div className="h-4 bg-gray-100 rounded animate-pulse w-full" />
+                      <div
+                        className="h-4 bg-gray-100 rounded animate-pulse w-3/4 mt-2"
+                        style={{ animationDelay: `${i * 100}ms` }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
-              {/* 打字机效果 */}
-              <div className="mt-4 flex items-center gap-2">
-                <Loader2 size={14} className="text-orange-500 animate-spin" />
-                <span className="text-xs text-gray-400">{displayedText}</span>
-                <span className="w-2 h-4 bg-orange-500 animate-pulse"/>
-              </div>
+              {/* 打字机光标效果 */}
+              {displayedText && (
+                <div className="mt-4 flex items-center gap-2">
+                  <Loader2
+                    size={14}
+                    className="text-orange-500 animate-spin"
+                  />
+                  <span className="text-xs text-gray-400">{displayedText}</span>
+                  <span className="w-2 h-4 bg-orange-500 animate-pulse" />
+                </div>
+              )}
             </div>
           ) : (
             <div className="py-8 text-center text-sm text-gray-400">
@@ -326,17 +377,21 @@ export default function RecipeDetailPage() {
           )}
         </section>
 
-        {/* ── 小贴士 - 浅橙色背景 ─────────────────────────────── */}
-        {(isAIRecipe ? aiTips : recipe.tips) && (
+        {/* ── 小贴士 - 浅橙色背景，无高亮 ──────────────────────── */}
+        {tips && (
           <section className="pb-6">
             <div className="rounded-xl bg-orange-50 p-4">
               <div className="flex items-start gap-2">
-                <Lightbulb size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />
+                <Lightbulb
+                  size={16}
+                  className="text-orange-500 mt-0.5 flex-shrink-0"
+                />
                 <div>
-                  <h3 className="text-sm font-semibold text-orange-700 mb-1">小贴士</h3>
-                  <p className="text-sm text-gray-800 leading-relaxed">
-                    {isAIRecipe ? aiTips : recipe.tips}
-                  </p>
+                  <h3 className="text-sm font-semibold text-orange-700 mb-1">
+                    小贴士
+                  </h3>
+                  {/* 纯文本，无高亮 */}
+                  <p className="text-sm text-gray-800 leading-relaxed">{tips}</p>
                 </div>
               </div>
             </div>
@@ -345,7 +400,6 @@ export default function RecipeDetailPage() {
 
         {/* 底部留白 */}
         <div className="h-4" />
-
       </main>
     </div>
   )
