@@ -1,24 +1,32 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { Search, Clock, CheckCircle2, AlertCircle, RefreshCw, Loader2, ChefHat, ArrowLeft } from "lucide-react"
-import { StatusBar } from "@/components/shared/StatusBar"
+import { Search, CheckCircle2, RefreshCw, Loader2, ChefHat, ArrowLeft } from "lucide-react"
 import { getRecommendations, type Recommendation } from "@/lib/recommendApi"
 import { getIngredients } from "@/lib/storage"
+import {
+  getCachedRecommendations,
+  saveCachedRecommendations,
+  isCacheValid,
+  getIngredientsHash,
+  clearCachedRecommendations,
+  type CachedRecommendation,
+} from "@/lib/storage"
 import { cn } from "@/lib/utils"
 
 export default function RecommendPage() {
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([])
+  const [recommendations, setRecommendations] = useState<CachedRecommendation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedMethod, setSelectedMethod] = useState<string>("全部")
   const [userIngredients, setUserIngredients] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [isInitialized, setIsInitialized] = useState(false)
 
   const cookingMethods = ["全部", "快手菜", "家常菜", "蒸煮", "炒制"]
 
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
@@ -29,13 +37,33 @@ export default function RecommendPage() {
       if (ingredients.length === 0) {
         setError("请先在首页添加食材，我会为你推荐合适的菜谱")
         setRecommendations([])
+        setIsLoading(false)
         return
       }
 
+      // 检查缓存是否有效（食材未变化）
+      if (isCacheValid()) {
+        const cached = getCachedRecommendations()
+        if (cached && cached.length > 0) {
+          console.log("[Recommend] 使用缓存数据，条数:", cached.length)
+          setRecommendations(cached)
+          setIsLoading(false)
+          setIsInitialized(true)
+          return
+        }
+      } else {
+        // 缓存无效，清除
+        clearCachedRecommendations()
+      }
+
+      console.log("[Recommend] 缓存未命中或已过期，调用 API...")
       const response = await getRecommendations(ingredients)
 
       if (response.success && response.data) {
-        setRecommendations(response.data.recommendations)
+        const data = response.data.recommendations as CachedRecommendation[]
+        setRecommendations(data)
+        // 存入缓存
+        saveCachedRecommendations(data, getIngredientsHash())
       } else {
         setError(response.error || "获取推荐失败")
       }
@@ -43,11 +71,23 @@ export default function RecommendPage() {
       setError(err instanceof Error ? err.message : "获取推荐失败，请重试")
     } finally {
       setIsLoading(false)
+      setIsInitialized(true)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchRecommendations()
+  }, [fetchRecommendations])
+
+  // 监听首页食材变化事件，清除缓存
+  useEffect(() => {
+    const handleIngredientsChanged = () => {
+      console.log("[Recommend] 检测到食材变化，清除缓存")
+      clearCachedRecommendations()
+    }
+
+    window.addEventListener("cooking_ideas_ingredients_changed", handleIngredientsChanged)
+    return () => window.removeEventListener("cooking_ideas_ingredients_changed", handleIngredientsChanged)
   }, [])
 
   const filteredRecommendations =
@@ -77,12 +117,16 @@ export default function RecommendPage() {
         </Link>
       </div>
 
-      <main className="pb-8 max-w-lg mx-auto">
+      <main className="pb-8 max-w-md mx-auto">
 
         {/* ── 标题区 ─────────────────────────────────────────── */}
         <div className="px-5 pt-1 pb-3">
           <h1 className="text-2xl font-bold text-black">今日推荐</h1>
-          <p className="text-sm text-gray-400 mt-0.5">根据你的冰箱量身定制</p>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {userIngredients.length > 0
+              ? `根据「${userIngredients.slice(0, 3).join("、")}${userIngredients.length > 3 ? "..." : ""}」为你推荐`
+              : "根据你的冰箱量身定制"}
+          </p>
         </div>
 
         {/* ── 搜索框 ─────────────────────────────────────────── */}
@@ -130,7 +174,9 @@ export default function RecommendPage() {
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-28">
               <div className="w-12 h-12 rounded-full border-2 border-orange-500 border-t-transparent animate-spin"/>
-              <p className="mt-5 text-sm text-gray-400">正在为你计算最佳推荐...</p>
+              <p className="mt-5 text-sm text-gray-400">
+                {isInitialized ? "根据食材生成灵感中..." : "正在加载..."}
+              </p>
             </div>
           )}
 
