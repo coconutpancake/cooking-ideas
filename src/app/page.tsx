@@ -1,104 +1,17 @@
 "use client"
 
-import { useState, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react"
+import { useState, useMemo, useRef, useCallback } from "react"
 import Link from "next/link"
 import { X, Plus, Snowflake, Camera, Upload, Loader2 } from "lucide-react"
-import { ImageUploader } from "@/components/shared/ImageUploader"
+import UploadTrigger from "@/components/shared/UploadTrigger"
 import { useIngredients } from "@/hooks/useIngredients"
 import { formatRelativeTime } from "@/lib/utils"
 import type { IngredientItem } from "@/lib/mockApi"
 import { getLastUpdated } from "@/lib/storage"
-import { compressImage, isMobileDevice } from "@/lib/imageUtils"
-import { identifyIngredients } from "@/lib/mockApi"
+import { classifyIngredient, CATEGORIES, type CategoryKey } from "@/lib/ingredientClassifier"
 import { addIngredients } from "@/lib/storage"
 import { notifyIngredientsChanged } from "@/hooks/useIngredients"
-
-// ─── 食材分类 ───────────────────────────────────────────────
-type CategoryKey = "meat" | "vegetable" | "other"
-
-interface CategoryConfig {
-  key: CategoryKey
-  label: string
-}
-
-const CATEGORIES: CategoryConfig[] = [
-  { key: "meat", label: "肉类海鲜" },
-  { key: "vegetable", label: "蔬菜水果" },
-  { key: "other", label: "调料其他" },
-]
-
-// 食材分类映射
-function classifyIngredient(name: string): CategoryKey {
-  const n = name.toLowerCase()
-  if (/猪|牛|羊|鸡|鸭|鹅|肉|鱼|虾|蟹|贝|蛤|螺|鱿鱼|章鱼|牛排|香肠|腊肉|火腿|培根|排骨|蹄|内脏|肝|腰|肚/.test(n)) return "meat"
-  if (/菜|蔬|番茄|西红柿|黄瓜|土豆|马铃薯|萝卜|胡萝卜|洋葱|葱|蒜|姜|椒|茄子|豆角|四季豆|西兰花|菠菜|白菜|生菜|油菜|芹菜|韭菜|香菜|茼蒿|苦瓜|丝瓜|冬瓜|南瓜|莲藕|竹笋|菌|菇|木耳|豆腐|豆浆|腐竹|水果|苹果|香蕉|梨|桃|橙|橘|葡萄|草莓|蓝莓|芒果|西瓜|菠萝|柠檬/.test(n)) return "vegetable"
-  return "other"
-}
-
-// ─── 内部上传触发器（供父组件调用）─────────────────────────────
-export interface UploadTriggerRef {
-  triggerUpload: () => void
-}
-
-const UploadTrigger = forwardRef<UploadTriggerRef>((_, ref) => {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useImperativeHandle(ref, () => ({
-    triggerUpload: () => {
-      inputRef.current?.click()
-    },
-  }))
-
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setIsProcessing(true)
-    setError(null)
-
-    try {
-      const compressed = await compressImage(file, 1024, 0.85)
-      const response = await identifyIngredients(compressed.base64)
-
-      if (response.success && response.data && response.data.ingredients.length > 0) {
-        const names = response.data.ingredients.map(i => i.name)
-        addIngredients(names)
-        notifyIngredientsChanged()
-      } else {
-        setError("未能在图片中识别出食材")
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "图片处理失败")
-    } finally {
-      setIsProcessing(false)
-      e.target.value = ""
-    }
-  }, [])
-
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-      />
-      {isProcessing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
-          <div className="bg-white rounded-2xl px-6 py-4 flex items-center gap-3 shadow-lg">
-            <Loader2 size={20} className="text-orange-500 animate-spin" />
-            <span className="text-sm text-black font-medium">正在识别食材...</span>
-          </div>
-        </div>
-      )}
-    </>
-  )
-})
-
-UploadTrigger.displayName = "UploadTrigger"
+import type { UploadTriggerRef } from "@/components/shared/UploadTrigger"
 
 // ─── 主组件 ──────────────────────────────────────────────────
 export default function HomePage() {
