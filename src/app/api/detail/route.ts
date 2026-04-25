@@ -87,25 +87,11 @@ export async function POST(request: NextRequest) {
     console.log("[Detail API] 主食材:", mainIngredients)
     console.log("[Detail API] 已有食材:", availableIngredients)
 
-    // 没有 API Key，使用本地步骤
+    // 无 API Key 时直接返回错误（本地菜谱数据已移除）
     if (!process.env.AI_API_KEY) {
-      console.log("[Detail API] 无 API Key，使用本地数据")
-
-      const { getRecipeByTitle, getRecipeById } = await import("@/lib/recipes")
-      const recipe = getRecipeByTitle(recipeName) || getRecipeById(recipeName)
-
-      if (recipe && recipe.steps) {
-        console.log("[Detail API] 返回本地步骤，步数:", recipe.steps.length)
-        return NextResponse.json({
-          success: true,
-          steps: recipe.steps,
-          fullText: recipe.steps.map((s) => `${s.order}. ${s.description}`).join("\n"),
-        })
-      }
-
       return NextResponse.json(
-        { success: false, error: "本地无此菜谱步骤" },
-        { status: 404 }
+        { success: false, error: "未配置 AI_API_KEY，无法生成菜谱步骤" },
+        { status: 503 }
       )
     }
 

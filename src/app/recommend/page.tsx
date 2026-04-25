@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Search, CheckCircle2, RefreshCw, Loader2, ChefHat, ArrowLeft } from "lucide-react"
-import { getRecommendations, type Recommendation } from "@/lib/recommendApi"
+import { getRecommendations } from "@/lib/recommendApi"
 import { getIngredients } from "@/lib/storage"
 import {
   getCachedRecommendations,
@@ -26,6 +26,14 @@ export default function RecommendPage() {
 
   const cookingMethods = ["全部", "快手菜", "家常菜", "蒸煮", "炒制"]
 
+  const FILTER_MAP: Record<string, (r: CachedRecommendation) => boolean> = {
+    "全部": () => true,
+    "快手菜": r => r.cookingTime <= 20,
+    "家常菜": r => r.cookingMethod === "炒" || r.cookingMethod === "煮",
+    "蒸煮": r => r.cookingMethod === "蒸" || r.cookingMethod === "煮",
+    "炒制": r => r.cookingMethod === "炒",
+  }
+
   const fetchRecommendations = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -45,7 +53,6 @@ export default function RecommendPage() {
       if (isCacheValid()) {
         const cached = getCachedRecommendations()
         if (cached && cached.length > 0) {
-          console.log("[Recommend] 使用缓存数据，条数:", cached.length)
           setRecommendations(cached)
           setIsLoading(false)
           setIsInitialized(true)
@@ -56,7 +63,6 @@ export default function RecommendPage() {
         clearCachedRecommendations()
       }
 
-      console.log("[Recommend] 缓存未命中或已过期，调用 API...")
       const response = await getRecommendations(ingredients)
 
       if (response.success && response.data) {
@@ -90,16 +96,9 @@ export default function RecommendPage() {
     return () => window.removeEventListener("cooking_ideas_ingredients_changed", handleIngredientsChanged)
   }, [])
 
-  const filteredRecommendations =
-    selectedMethod === "全部"
-      ? recommendations
-      : recommendations.filter((r) => {
-          if (selectedMethod === "快手菜") return r.cookingTime <= 20
-          if (selectedMethod === "家常菜") return r.cookingMethod === "炒" || r.cookingMethod === "煮"
-          if (selectedMethod === "蒸煮") return r.cookingMethod === "蒸" || r.cookingMethod === "煮"
-          if (selectedMethod === "炒制") return r.cookingMethod === "炒"
-          return true
-        })
+  const filteredRecommendations = recommendations.filter(
+    FILTER_MAP[selectedMethod] || (() => true)
+  )
 
   return (
     <div className="min-h-screen bg-gray-50">

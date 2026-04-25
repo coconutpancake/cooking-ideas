@@ -251,6 +251,7 @@ function parseAIResponse(content: string): AIGeneratedRecipe[] {
     if (match && !seenTitles.has(match[1])) {
       results.push({
         title: match[1],
+        emoji: "🍽️",
         mainIngredients: [],
         seasonings: [],
       })
