@@ -1,70 +1,85 @@
-import { NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
+import { NextRequest } from "next/server"
 
-// 食材识别结果格式 (来自 SDD)
+import { jsonResponse, optionsResponse } from "@/lib/server/http"
+import { createServerOpenAIClient } from "@/lib/server/openai"
+
 interface IngredientItem {
   name: string
   amount?: string
 }
 
-interface VisionResponse {
-  success: boolean
-  data?: {
-    ingredients: IngredientItem[]
-    imageId: string
-    message: string
+const SYSTEM_PROMPT =
+  "你是一个没有感情的食材提取程序。只提取图片中清晰可见的、完整的食材。看不清或不确定的物体一律丢弃，绝不猜测。" +
+  '绝不输出任何多余的解释性文字。只输出要求的 JSON 格式。禁止输出：油、盐、酱、醋等瓶装调料、厨具、餐具、桌布等非食材。JSON格式：{"ingredients":[{"name":"食材名称","amount":"份量"}]}'
+
+const DEFAULT_VISION_MODEL = "qwen-vl-plus"
+
+function parseIngredients(content: string): IngredientItem[] | null {
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+
+  if (!jsonMatch) {
+    return null
   }
-  error?: string
+
+  const parsed = JSON.parse(jsonMatch[0]) as { ingredients?: IngredientItem[] }
+  const ingredients = Array.isArray(parsed.ingredients) ? parsed.ingredients : []
+  const seen = new Set<string>()
+
+  return ingredients.filter((item) => {
+    if (!item || typeof item.name !== "string") {
+      return false
+    }
+
+    const normalizedName = item.name.trim()
+    if (!normalizedName || seen.has(normalizedName)) {
+      return false
+    }
+
+    seen.add(normalizedName)
+    item.name = normalizedName
+    if (typeof item.amount === "string") {
+      item.amount = item.amount.trim()
+    }
+    return true
+  })
 }
 
-// 系统级指令 - 严格约束模型行为
-const SYSTEM_PROMPT = `你是一个没有感情的食材提取程序。只提取图片中清晰可见的、完整的食材。看不清或不确定的物体一律丢弃，绝不猜测。绝不输出任何多余的解释性文字。只输出要求的 JSON 格式。禁止输出：油、盐、酱、醋等瓶装调料、厨具、餐具、桌布等非食材。JSON格式：{"ingredients":[{"name":"食材名称","amount":"份量"}]}`
+export async function OPTIONS(request: NextRequest) {
+  return optionsResponse(request)
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { image } = body
+    const image = typeof body?.image === "string" ? body.image : ""
 
     if (!image) {
-      return NextResponse.json(
+      return jsonResponse(
+        request,
         { success: false, error: "缺少图片数据" },
         { status: 400 }
       )
     }
 
-    // 验证 Base64 格式
     if (!image.startsWith("data:image/")) {
-      return NextResponse.json(
+      return jsonResponse(
+        request,
         { success: false, error: "图片格式无效" },
         { status: 400 }
       )
     }
 
-    // 检查是否配置了 API Key
     if (!process.env.AI_API_KEY) {
-      console.error("[Vision API] ❌ 未配置 AI_API_KEY")
-      return NextResponse.json(
+      return jsonResponse(
+        request,
         { success: false, error: "未配置 API Key，请联系管理员配置阿里云通义千问 API" },
         { status: 500 }
       )
     }
 
-    const client = new OpenAI({
-      apiKey: process.env.AI_API_KEY,
-      baseURL: process.env.AI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      dangerouslyAllowBrowser: false,
-    })
+    const client = createServerOpenAIClient()
+    const model = process.env.VISION_MODEL_NAME || DEFAULT_VISION_MODEL
 
-    const model = process.env.VISION_MODEL_NAME || "qwen-vl-plus"
-
-    console.log("========================================")
-    console.log("[Vision API] 📤 发送请求:")
-    console.log("  - Model:", model)
-    console.log("  - BaseURL:", process.env.AI_BASE_URL)
-    console.log("  - Image Size:", image.length, "bytes")
-    console.log("========================================")
-
-    // 阿里云通义千问兼容格式：把 system prompt 放在 user message 里
     const response = await client.chat.completions.create({
       model,
       messages: [
@@ -90,67 +105,44 @@ export async function POST(request: NextRequest) {
 
     const content = response.choices?.[0]?.message?.content
 
-    console.log("========================================")
-    console.log("[Vision API] 📥 Raw Response:")
-    console.log("  - Content:", content)
-    console.log("  - Finish Reason:", response.choices?.[0]?.finish_reason)
-    console.log("========================================")
-
     if (!content) {
-      console.error("[Vision API] ❌ 返回内容为空")
-      return NextResponse.json(
+      return jsonResponse(
+        request,
         { success: false, error: "API 返回内容为空" },
         { status: 500 }
       )
     }
 
-    // 提取 JSON
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      console.error("[Vision API] ❌ 无法提取 JSON:", content)
-      return NextResponse.json(
-        { success: false, error: "无法解析识别结果，格式错误" },
-        { status: 500 }
-      )
-    }
-
-    let parsed: { ingredients?: IngredientItem[] }
+    let ingredients: IngredientItem[] | null
     try {
-      parsed = JSON.parse(jsonMatch[0])
-    } catch (e) {
-      console.error("[Vision API] ❌ JSON 解析失败:", e)
-      return NextResponse.json(
+      ingredients = parseIngredients(content)
+    } catch {
+      return jsonResponse(
+        request,
         { success: false, error: "JSON 解析失败" },
         { status: 500 }
       )
     }
 
-    // 去重
-    const rawIngredients = parsed.ingredients || []
-    const seen = new Set<string>()
-    const deduplicated = rawIngredients.filter((item: IngredientItem) => {
-      if (seen.has(item.name)) return false
-      seen.add(item.name)
-      return true
-    })
+    if (!ingredients) {
+      return jsonResponse(
+        request,
+        { success: false, error: "无法解析识别结果，格式错误" },
+        { status: 500 }
+      )
+    }
 
-    console.log("[Vision API] ✅ 识别成功:", deduplicated)
-
-    return NextResponse.json({
+    return jsonResponse(request, {
       success: true,
       data: {
-        ingredients: deduplicated,
+        ingredients,
         imageId: `img_${Date.now()}`,
-        message: `成功识别出 ${deduplicated.length} 种食材`,
+        message: `成功识别出 ${ingredients.length} 种食材`,
       },
     })
   } catch (error) {
-    console.error("========================================")
-    console.error("[Vision API] ❌ 错误:")
-    console.error("  -", error instanceof Error ? error.message : String(error))
-    console.error("========================================")
-
-    return NextResponse.json(
+    return jsonResponse(
+      request,
       {
         success: false,
         error: error instanceof Error ? error.message : "服务器内部错误",
@@ -160,12 +152,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  const hasKey = !!process.env.AI_API_KEY
-  return NextResponse.json({
+export async function GET(request: NextRequest) {
+  const hasKey = Boolean(process.env.AI_API_KEY)
+
+  return jsonResponse(request, {
     status: "ok",
     provider: "aliyun-qwen",
-    model: process.env.VISION_MODEL_NAME || "qwen-vl-plus",
+    model: process.env.VISION_MODEL_NAME || DEFAULT_VISION_MODEL,
     configured: hasKey,
     mode: hasKey ? "real" : "not_configured",
   })

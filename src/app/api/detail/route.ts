@@ -1,9 +1,7 @@
-import { NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
+import { NextRequest } from "next/server"
 
-// ============================================
-// 菜谱详情 API - AI 生成烹饪步骤
-// ============================================
+import { jsonResponse, optionsResponse } from "@/lib/server/http"
+import { createServerOpenAIClient } from "@/lib/server/openai"
 
 interface DetailRequest {
   recipeName: string
@@ -11,93 +9,79 @@ interface DetailRequest {
   availableIngredients: string[]
 }
 
-function createOpenAIClient(): OpenAI {
-  const apiKey = process.env.AI_API_KEY
-  const baseURL = process.env.AI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
-  if (!apiKey) {
-    throw new Error("未配置 AI_API_KEY")
-  }
-
-  return new OpenAI({
-    apiKey,
-    baseURL,
-    dangerouslyAllowBrowser: false,
-  })
-}
-
-function formatIngredients(available: string[], all: string[]): string {
-  const availableSet = new Set(available.map((i) => i.toLowerCase()))
-  const result: string[] = []
-
-  for (const ing of all) {
-    const isAvailable = availableSet.has(ing.toLowerCase())
-    result.push(`${ing}${isAvailable ? " [已有]" : " [缺少]"}`)
-  }
-
-  return result.join("、")
-}
-
 interface ParsedStep {
   order: number
   description: string
 }
 
-function parseSteps(text: string): ParsedStep[] {
-  const steps: ParsedStep[] = []
-  const lines = text.split("\n").filter((line) => line.trim())
+const DEFAULT_TEXT_MODEL = "qwen-plus"
 
-  let order = 1
+function formatIngredients(availableIngredients: string[], allIngredients: string[]): string {
+  const availableSet = new Set(availableIngredients.map((item) => item.toLowerCase()))
+
+  return allIngredients
+    .map((ingredient) =>
+      `${ingredient}${availableSet.has(ingredient.toLowerCase()) ? " [已有]" : " [缺少]"}`
+    )
+    .join("、")
+}
+
+function parseSteps(text: string): ParsedStep[] {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const steps: ParsedStep[] = []
+
   for (const line of lines) {
     const cleaned = line
-      .replace(/^[1-9][\.、]?\s*/, "")
-      .replace(/^第[一二三四五六七八九十百千万\d]+[步章节个]/, "")
+      .replace(/^[1-9]\d*[.\u3001)\s-]*/, "")
+      .replace(/^step\s*\d+[:.)\s-]*/i, "")
       .trim()
 
     if (cleaned.length > 5) {
-      steps.push({ order, description: cleaned })
-      order++
+      steps.push({
+        order: steps.length + 1,
+        description: cleaned,
+      })
     }
   }
 
   if (steps.length === 0 && text.trim()) {
-    steps.push({ order: 1, description: text.trim() })
+    return [{ order: 1, description: text.trim() }]
   }
 
   return steps
 }
 
-// ============================================
-// API Route Handler - 非流式响应
-// ============================================
+export async function OPTIONS(request: NextRequest) {
+  return optionsResponse(request)
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const body: DetailRequest = await request.json()
-    const { recipeName, mainIngredients, availableIngredients } = body
+    const body = (await request.json()) as Partial<DetailRequest>
+    const recipeName = typeof body.recipeName === "string" ? body.recipeName.trim() : ""
+    const mainIngredients = Array.isArray(body.mainIngredients) ? body.mainIngredients : []
+    const availableIngredients = Array.isArray(body.availableIngredients)
+      ? body.availableIngredients
+      : []
 
     if (!recipeName) {
-      return NextResponse.json(
+      return jsonResponse(
+        request,
         { success: false, error: "缺少菜谱名称" },
         { status: 400 }
       )
     }
 
-    console.log("[Detail API] 生成步骤，菜谱:", recipeName)
-    console.log("[Detail API] 主食材:", mainIngredients)
-    console.log("[Detail API] 已有食材:", availableIngredients)
-
-    // 无 API Key 时直接返回错误（本地菜谱数据已移除）
     if (!process.env.AI_API_KEY) {
-      return NextResponse.json(
+      return jsonResponse(
+        request,
         { success: false, error: "未配置 AI_API_KEY，无法生成菜谱步骤" },
         { status: 503 }
       )
     }
 
-    // 有 API Key，使用 AI 生成
-    const client = createOpenAIClient()
-    const model = process.env.TEXT_MODEL_NAME || "qwen-plus"
+    const client = createServerOpenAIClient()
+    const model = process.env.TEXT_MODEL_NAME || DEFAULT_TEXT_MODEL
     const ingredientList = formatIngredients(availableIngredients, mainIngredients)
 
     const prompt =
@@ -123,8 +107,6 @@ export async function POST(request: NextRequest) {
       "4. 加入鸡蛋，调入盐翻炒均匀\n" +
       "### 小贴士：番茄炒至微微出汁时口感最佳，避免过度翻炒。"
 
-    console.log("[Detail API] 调用 AI 生成（等待完成）...")
-
     const completion = await client.chat.completions.create({
       model,
       messages: [
@@ -139,41 +121,22 @@ export async function POST(request: NextRequest) {
     })
 
     const fullText = completion.choices[0]?.message?.content || ""
-
-    // 提取小贴士
-    let tips: string | undefined
-    const tipsMatch = fullText.match(/###\s*小贴士[：:]\s*([\s\S]+)$/)
-    if (tipsMatch) {
-      tips = tipsMatch[1].trim()
-    }
-
-    // 提取纯步骤文本
+    const tipsMatch = fullText.match(/###\s*(?:小贴士|Tips)[：:]\s*([\s\S]+)$/i)
+    const tips = tipsMatch?.[1]?.trim()
     const stepsText = tips
-      ? fullText.replace(/###\s*小贴士[：:][\s\S]+$/, "").trim()
+      ? fullText.replace(/###\s*(?:小贴士|Tips)[：:][\s\S]+$/i, "").trim()
       : fullText
     const steps = parseSteps(stepsText)
 
-    console.log(
-      "[Detail API] AI 生成完成，步骤数:",
-      steps.length,
-      "小贴士:",
-      tips?.slice(0, 30) || "无"
-    )
-    console.log("[Detail API] Raw response:", fullText.slice(0, 200))
-
-    return NextResponse.json({
+    return jsonResponse(request, {
       success: true,
       steps,
       tips,
       fullText,
     })
   } catch (error) {
-    console.error(
-      "[Detail API] 错误:",
-      error instanceof Error ? error.message : String(error)
-    )
-
-    return NextResponse.json(
+    return jsonResponse(
+      request,
       {
         success: false,
         error: error instanceof Error ? error.message : "服务器内部错误",
@@ -183,10 +146,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET 请求返回 API 状态
-export async function GET() {
-  const hasKey = !!process.env.AI_API_KEY
-  return NextResponse.json({
+export async function GET(request: NextRequest) {
+  const hasKey = Boolean(process.env.AI_API_KEY)
+
+  return jsonResponse(request, {
     status: "ok",
     mode: hasKey ? "ai" : "local",
     description: hasKey ? "AI 生成烹饪步骤" : "使用本地菜谱数据",
