@@ -18,6 +18,7 @@ This document is the contract for the future Expo client.
 - CORS allowlist source:
   - `CORS_ALLOWED_ORIGINS` env variable, comma-separated
   - If unset, local/dev Expo origins such as `localhost`, `127.0.0.1`, LAN IPs, `*.expo.app`, `*.exp.direct` are allowed by default
+- Next config also applies API-wide CORS headers for `/api/:path*`, so Vercel-generated `OPTIONS` responses and browser/Expo Web debugging receive the same cross-origin contract.
 
 ## Security Rules
 
@@ -337,4 +338,19 @@ Current web frontend still uses the same endpoints:
 - `src/lib/recommendApi.ts` -> `POST /api/recommend`
 - `src/app/recipe/[id]/page.tsx` -> `POST /api/detail`
 
-No web frontend request path was changed during this hardening step.
+Expo mobile client call sites:
+
+- `cooking_ideas_mobile/src/api/client.ts` -> shared API client for `/api/vision`, `/api/recommend`, `/api/detail`
+- `cooking_ideas_mobile/hooks/use-vision-picker.ts` -> image picker, JPEG compression, and `/api/vision` request
+
+Mobile API base URL resolution:
+
+1. `EXPO_PUBLIC_API_BASE_URL` when explicitly configured
+2. Development LAN fallback: `http://<Expo host IP>:3000`
+3. Production fallback: `https://cooking-ideas.vercel.app`
+
+For Expo Go device testing, start the backend with:
+
+```bash
+npm run dev -- -H 0.0.0.0 -p 3000
+```

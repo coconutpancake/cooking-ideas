@@ -112,11 +112,14 @@
 - [x] Phase 1-4, 6, 8 完成
 - [x] Phase 5 AI 视觉模型集成完成
 - [x] Phase 6 菜谱推荐功能完成
+- [x] Expo 移动端 MVP 适配完成（真机拍照/相册识别通过）
 - [ ] Phase 7 Firebase 后端集成未开始
 - [ ] Phase 9 动画优化未开始
 - [ ] Phase 10 测试优化未开始
 
 ### 最新提交
+- `本次提交` — 移动端 MVP 联调完成：Expo 客户端接入后端 API、真机图片识别链路通过、本地 API 回退与 CORS 配置完成
+- `596721d` — 完成 API 层独立封装与跨域配置
 - `017622b` — 清理死代码与冗余逻辑（移除 recipes.ts 527行数据、mockApi.ts console.log、recommend/page.tsx 冗余导入与 filter if-else）
 - `0361b2f` — 重构：组件提取与代码结构优化（新建 UploadTrigger.tsx、ingredientClassifier.ts、RecipeDetailComponents.tsx）
 
@@ -244,10 +247,39 @@ Next.js (App Router) + Tailwind CSS + TypeScript + 阿里云通义千问 + Local
 
 ---
 
+## 移动端 MVP 完成标记
+
+**Expo 移动端 MVP 已完成**（2026-05-06）
+
+### 已验证链路
+- Expo Go 真机可从相册选择图片并压缩为 JPEG Base64
+- 移动端可调用 `/api/vision` 识别图片中的食材
+- 本地 Next API 可通过局域网 `http://<电脑IP>:3000` 供真机调试
+- Vercel API 仍作为生产默认地址
+- API 层支持 `EXPO_PUBLIC_API_BASE_URL` 显式覆盖
+- `/api/*` 已在 Next 配置层补充 CORS 响应头，覆盖 GET/POST/OPTIONS
+
+### 移动端仓库关键文件
+- `src/api/client.ts` — API 客户端，支持本地开发地址、生产地址和网络失败回退
+- `hooks/use-vision-picker.ts` — 拍照/相册选择、图片压缩、调用视觉识别 API
+- `hooks/use-ingredients.ts` — 食材本地持久化
+- `app/index.tsx` — 冰箱首页与识别入口
+- `app/recommend.tsx` — 推荐列表页
+- `app/recipe/[id].tsx` — 菜谱详情页
+
+### 调试约定
+- 后端本地调试命令：`npm run dev -- -H 0.0.0.0 -p 3000`
+- 移动端调试命令：`npx expo start`
+- 真机调试建议使用 Expo LAN 模式，并保持手机与电脑在同一局域网
+- 如需强制指定后端地址，设置 `EXPO_PUBLIC_API_BASE_URL=http://<电脑IP>:3000`
+
+---
+
 ## 更新日志
 
 | 日期 | 提交 | 更新内容 |
 |------|------|----------|
+| 2026-05-06 | 本次提交 | Expo 移动端 MVP 真机联调通过：图片选择、压缩、上传识别食材链路跑通；移动端 API 增加本地局域网回退；后端补充 `/api/*` CORS 响应头；清理本地日志/Expo 缓存提交风险 |
 | 2026-04-26 | `017622b` | 清理死代码：移除 recipes.ts 527行本地数据、mockApi.ts console.log、recommend/page.tsx 冗余导入与 filter if-else 改用 FILTER_MAP；修复 detail/route.ts 本地 fallback 引用错误 |
 | 2026-04-26 | `0361b2f` | 组件提取重构：新建 UploadTrigger.tsx（从 page.tsx 提取）、ingredientClassifier.ts（食材分类逻辑）、RecipeDetailComponents.tsx（详情页 RecipeHeader/IngredientList/StepList/TipsCard 子组件） |
 | 2026-04-25 | — | 新增推荐列表缓存机制：API 结果存入 localStorage，食材变化时自动清除；返回详情页不再重复调用大模型，节省 Token |
