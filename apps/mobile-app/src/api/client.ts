@@ -1,4 +1,4 @@
-import type { RecipeRecommendation, RecipeStep } from '@/lib/mock-data';
+import type { RecipeRecommendation, RecipeStep } from '@/lib/types';
 import Constants from 'expo-constants';
 
 const PRODUCTION_API_BASE_URL = 'https://cooking-ideas.vercel.app';

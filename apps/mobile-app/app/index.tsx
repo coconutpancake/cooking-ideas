@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useIngredients } from '@/hooks/use-ingredients';
 import { useVisionPicker } from '@/hooks/use-vision-picker';
-import { categories, type CategoryKey, type IngredientItem } from '@/lib/mock-data';
+import { categories, type CategoryKey, type IngredientItem } from '@/lib/types';
 
 export default function HomeScreen() {
   const {
@@ -41,7 +41,7 @@ export default function HomeScreen() {
     return map;
   }, [ingredients]);
 
-  const mockCameraUpdate = async () => {
+  const handleCameraUpdate = async () => {
     console.log('>>> [Home] 拍照更新按钮已点击');
 
     try {
@@ -114,7 +114,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               activeOpacity={0.75}
               disabled={isSaving || isRecognizing}
-              onPress={mockCameraUpdate}
+              onPress={handleCameraUpdate}
               className="flex-row items-center gap-1.5 rounded-full border border-gray-100 px-4 py-2">
               {isRecognizing ? (
                 <ActivityIndicator color="#f97316" size="small" />

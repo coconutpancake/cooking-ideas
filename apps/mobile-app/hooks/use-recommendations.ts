@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 
 import { fetchRecommendations } from '@/src/api/client';
-import type { RecipeRecommendation } from '@/lib/mock-data';
+import type { RecipeRecommendation } from '@/lib/types';
 import {
   clearRecommendationsCache,
   getIngredients,

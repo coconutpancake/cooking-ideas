@@ -11,7 +11,7 @@ import {
   StepList,
   TipsCard,
 } from '@/components/recipe-detail';
-import type { RecipeDetail } from '@/lib/mock-data';
+import type { RecipeDetail } from '@/lib/types';
 import { fetchRecipeDetail } from '@/src/api/client';
 import { getCachedRecipeRecommendation, getIngredients, getRecipeDetailCache, saveRecipeDetailCache } from '@/lib/storage';
 

@@ -1,7 +1,7 @@
 import { CheckCircle2, Circle } from 'lucide-react-native';
 import { Text, TouchableOpacity, View } from 'react-native';
 
-import type { RecipeStep } from '@/lib/mock-data';
+import type { RecipeStep } from '@/lib/types';
 
 interface RecipeHeaderProps {
   title: string;

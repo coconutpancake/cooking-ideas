@@ -1,11 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
-  mockIngredients,
   type IngredientItem,
   type RecipeDetail,
   type RecipeRecommendation,
-} from '@/lib/mock-data';
+} from '@/lib/types';
 
 const INGREDIENTS_KEY = 'cooking_ideas:ingredients';
 const LAST_UPDATED_KEY = 'cooking_ideas:last_updated';
@@ -31,8 +30,7 @@ export async function getIngredients(): Promise<IngredientItem[]> {
   const raw = await AsyncStorage.getItem(INGREDIENTS_KEY);
 
   if (!raw) {
-    await saveIngredients(mockIngredients);
-    return mockIngredients;
+    return [];
   }
 
   try {

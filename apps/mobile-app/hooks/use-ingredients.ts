@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { type CategoryKey, type IngredientItem } from '@/lib/mock-data';
+import { type CategoryKey, type IngredientItem } from '@/lib/types';
 import {
   clearRecommendationsCache,
   getIngredients,
