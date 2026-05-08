@@ -2,6 +2,13 @@
 
 This document is the contract for the future Expo client.
 
+## Repository Layout
+
+- API implementation: `apps/web-api/src/app/api/*`
+- Server-only helpers: `apps/web-api/src/lib/server/*`
+- Expo client caller: `apps/mobile-app/src/api/client.ts`
+- Global documentation: `docs/*`
+
 ## Base Rules
 
 - Base path: `/api`
@@ -23,8 +30,8 @@ This document is the contract for the future Expo client.
 ## Security Rules
 
 - All model provider keys are server-only.
-- `AI_API_KEY` is read only inside server route modules and `src/lib/server/openai.ts`.
-- No client-side module should import anything from `src/lib/server/*`.
+- `AI_API_KEY` is read only inside server route modules and `apps/web-api/src/lib/server/openai.ts`.
+- No client-side module should import anything from `apps/web-api/src/lib/server/*`.
 - Current frontend request helpers call relative paths only and do not attach provider credentials.
 
 ## Error Model

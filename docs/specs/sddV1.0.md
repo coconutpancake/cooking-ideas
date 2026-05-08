@@ -3,7 +3,9 @@
 ## 1. 技术架构
 
 ### 1.1 技术栈
-- **框架**：Next.js 14+ (App Router)
+- **仓库架构**：Monorepo 单体大仓库
+- **Web/API 框架**：Next.js 14+ (App Router)
+- **移动端框架**：Expo React Native
 - **样式**：Tailwind CSS + shadcn/ui
 - **类型**：TypeScript
 - **状态管理**：Zustand (UI状态) + TanStack Query (服务端状态)
@@ -13,23 +15,39 @@
 
 ### 1.2 项目结构
 ```
-src/
-├── app/                      # Next.js App Router
-│   ├── api/                  # API Routes
-│   │   ├── vision/          # AI 视觉识别
-│   │   └── recommend/        # 菜谱推荐
-│   ├── recommend/           # 推荐列表页
-│   ├── recipe/[id]/         # 菜谱详情页
-│   └── page.tsx             # 首页/冰箱
-├── components/              # 组件
-│   └── shared/              # 共享组件
-├── hooks/                   # 自定义 Hooks
-└── lib/                     # 工具库
-    ├── storage.ts           # LocalStorage 封装
-    ├── imageUtils.ts        # 图片压缩工具
-    ├── recommendApi.ts      # 推荐 API 客户端
-    └── recipes.ts           # 菜谱数据
+cooking_ideas/
+├── apps/
+│   ├── web-api/                    # Next.js 后端/API 与 Web 端
+│   │   ├── src/
+│   │   │   ├── app/
+│   │   │   │   ├── api/
+│   │   │   │   │   ├── vision/     # AI 视觉识别 API
+│   │   │   │   │   ├── recommend/  # 菜谱推荐 API
+│   │   │   │   │   └── detail/     # AI 烹饪步骤 API
+│   │   │   │   ├── recommend/      # 推荐列表页
+│   │   │   │   ├── recipe/[id]/    # 菜谱详情页
+│   │   │   │   └── page.tsx        # 首页/冰箱
+│   │   │   ├── components/         # Web 组件
+│   │   │   ├── hooks/              # Web Hooks
+│   │   │   └── lib/                # Web/API 工具库
+│   │   └── package.json
+│   └── mobile-app/                 # Expo 移动端
+│       ├── app/                    # Expo Router 页面
+│       ├── components/             # 移动端组件
+│       ├── hooks/                  # 移动端 Hooks
+│       ├── src/api/client.ts       # 移动端 API 客户端
+│       └── package.json
+└── docs/                           # 全局项目文档
+    ├── reports/
+    └── specs/
 ```
+
+### 1.3 Monorepo 约定
+- 仓库根目录为 `cooking_ideas`，保留原后端项目 `.git` 历史。
+- 后端/API 与 Web 端代码统一位于 `apps/web-api`。
+- Expo 移动端代码统一位于 `apps/mobile-app`，该目录不保留独立 `.git`。
+- 全局进度、接口、PRD、SDD 等文档统一维护在根目录 `docs`。
+- 各应用依然保留独立 `package.json` 和锁文件，命令在对应应用目录内执行。
 
 ---
 

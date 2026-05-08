@@ -2,8 +2,9 @@
 
 ## 项目概述
 - **项目名称**: 做饭灵感
-- **技术栈**: Next.js (App Router) + Tailwind CSS + TypeScript + shadcn/ui + Zustand + TanStack Query + Firebase
-- **目标平台**: iOS (Mobile Web)
+- **技术栈**: Monorepo + Next.js (App Router) + Expo React Native + Tailwind CSS + TypeScript + shadcn/ui + Zustand + TanStack Query + Firebase
+- **目标平台**: Web API / iOS / Android / Mobile Web
+- **仓库结构**: `apps/web-api`（Next.js 后端/API 与 Web 端）、`apps/mobile-app`（Expo 移动端）、`docs`（全局文档）
 
 ---
 
@@ -113,12 +114,14 @@
 - [x] Phase 5 AI 视觉模型集成完成
 - [x] Phase 6 菜谱推荐功能完成
 - [x] Expo 移动端 MVP 适配完成（真机拍照/相册识别通过）
+- [x] 项目物理架构升级为 Monorepo 单体大仓库
 - [ ] Phase 7 Firebase 后端集成未开始
 - [ ] Phase 9 动画优化未开始
 - [ ] Phase 10 测试优化未开始
 
 ### 最新提交
-- `本次提交` — 移动端 MVP 联调完成：Expo 客户端接入后端 API、真机图片识别链路通过、本地 API 回退与 CORS 配置完成
+- `be8663a` — 项目物理架构升级为 Monorepo 单体大仓库：保留 `cooking_ideas` 原 Git 历史，后端迁入 `apps/web-api`，移动端迁入 `apps/mobile-app`，全局文档归入根 `docs`，删除移动端嵌套 `.git`
+- `cc42d19` — 移动端 MVP 联调完成：Expo 客户端接入后端 API、真机图片识别链路通过、本地 API 回退与 CORS 配置完成
 - `596721d` — 完成 API 层独立封装与跨域配置
 - `017622b` — 清理死代码与冗余逻辑（移除 recipes.ts 527行数据、mockApi.ts console.log、recommend/page.tsx 冗余导入与 filter if-else）
 - `0361b2f` — 重构：组件提取与代码结构优化（新建 UploadTrigger.tsx、ingredientClassifier.ts、RecipeDetailComponents.tsx）
@@ -268,10 +271,44 @@ Next.js (App Router) + Tailwind CSS + TypeScript + 阿里云通义千问 + Local
 - `app/recipe/[id].tsx` — 菜谱详情页
 
 ### 调试约定
+- 后端本地调试目录：`apps/web-api`
 - 后端本地调试命令：`npm run dev -- -H 0.0.0.0 -p 3000`
+- 移动端调试目录：`apps/mobile-app`
 - 移动端调试命令：`npx expo start`
 - 真机调试建议使用 Expo LAN 模式，并保持手机与电脑在同一局域网
 - 如需强制指定后端地址，设置 `EXPO_PUBLIC_API_BASE_URL=http://<电脑IP>:3000`
+
+---
+
+## Monorepo 架构升级完成标记
+
+**项目物理架构已升级为 Monorepo 单体大仓库**（2026-05-08）
+
+### 完成范围
+- `cooking_ideas` 保留为仓库根目录，并继续沿用原 `.git` 历史
+- 原后端/API/Web 项目迁入 `apps/web-api`
+- 原 `cooking_ideas_mobile` 移动端项目迁入 `apps/mobile-app`
+- 全局文档集中在根目录 `docs`
+- 已删除 `apps/mobile-app/.git`，避免 Git 嵌套仓库或子模块冲突
+- 根目录新增全局 `.gitignore`，统一忽略 `node_modules/`、`.env`、`.expo/`、构建产物和日志缓存
+
+### 当前物理目录结构
+```
+cooking_ideas/
+├── .git/
+├── .gitignore
+├── apps/
+│   ├── web-api/
+│   └── mobile-app/
+└── docs/
+    ├── reports/
+    └── specs/
+```
+
+### 后续约定
+- 后端/API 相关命令在 `apps/web-api` 执行
+- 移动端相关命令在 `apps/mobile-app` 执行
+- 跨端共享规范、进度、接口和设计文档统一维护在根目录 `docs`
 
 ---
 
@@ -279,7 +316,8 @@ Next.js (App Router) + Tailwind CSS + TypeScript + 阿里云通义千问 + Local
 
 | 日期 | 提交 | 更新内容 |
 |------|------|----------|
-| 2026-05-06 | 本次提交 | Expo 移动端 MVP 真机联调通过：图片选择、压缩、上传识别食材链路跑通；移动端 API 增加本地局域网回退；后端补充 `/api/*` CORS 响应头；清理本地日志/Expo 缓存提交风险 |
+| 2026-05-08 | `be8663a` | 项目物理架构升级为 Monorepo 单体大仓库：保留后端原 Git 历史；后端迁入 `apps/web-api`；移动端迁入 `apps/mobile-app`；全局文档保留在根 `docs`；删除移动端嵌套 `.git` 并补充根 `.gitignore` |
+| 2026-05-06 | `cc42d19` | Expo 移动端 MVP 真机联调通过：图片选择、压缩、上传识别食材链路跑通；移动端 API 增加本地局域网回退；后端补充 `/api/*` CORS 响应头；清理本地日志/Expo 缓存提交风险 |
 | 2026-04-26 | `017622b` | 清理死代码：移除 recipes.ts 527行本地数据、mockApi.ts console.log、recommend/page.tsx 冗余导入与 filter if-else 改用 FILTER_MAP；修复 detail/route.ts 本地 fallback 引用错误 |
 | 2026-04-26 | `0361b2f` | 组件提取重构：新建 UploadTrigger.tsx（从 page.tsx 提取）、ingredientClassifier.ts（食材分类逻辑）、RecipeDetailComponents.tsx（详情页 RecipeHeader/IngredientList/StepList/TipsCard 子组件） |
 | 2026-04-25 | — | 新增推荐列表缓存机制：API 结果存入 localStorage，食材变化时自动清除；返回详情页不再重复调用大模型，节省 Token |
@@ -321,6 +359,7 @@ Next.js (App Router) + Tailwind CSS + TypeScript + 阿里云通义千问 + Local
 
 | 日期 | 决策 | 理由 |
 |------|------|------|
+| 2026-05-08 | 升级为 Monorepo 单体大仓库 | 保留后端项目既有 Git 历史，同时将 Web/API、Expo 移动端和全局文档纳入同一仓库，减少跨仓库同步成本，并避免移动端嵌套 `.git` 造成子模块冲突 |
 | 2026-04-26 | 本地菜谱数据完全移除，API 无 fallback | `detail/route.ts` 的本地 fallback 引用已不存在的函数；推荐系统已完全由 AI 生成，本地数据不再需要 |
 | 2026-03-28 | 主辅料分离：匹配度仅基于 mainIngredients 计算 | 调料为常备品，每家都有，若参与计算会导致匹配度失真。分离后推荐更符合实际烹饪场景 |
 | 2026-04-25 | 推荐列表缓存机制 | 防止从详情页返回时重复调用大模型 API，节省 Token 成本。缓存有效性由食材哈希值判定 |
