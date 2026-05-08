@@ -19,6 +19,18 @@ import { useIngredients } from '@/hooks/use-ingredients';
 import { useVisionPicker } from '@/hooks/use-vision-picker';
 import { categories, type CategoryKey, type IngredientItem } from '@/lib/types';
 
+function debugLog(message: string, details?: unknown) {
+  if (!__DEV__) {
+    return;
+  }
+
+  if (details === undefined) {
+    console.log(message);
+  } else {
+    console.log(message, details);
+  }
+}
+
 export default function HomeScreen() {
   const {
     ingredients,
@@ -42,11 +54,11 @@ export default function HomeScreen() {
   }, [ingredients]);
 
   const handleCameraUpdate = async () => {
-    console.log('>>> [Home] 拍照更新按钮已点击');
+    debugLog('>>> [Home] camera update pressed');
 
     try {
       const recognizedNames = await pickAndRecognize();
-      console.log('>>> [Home] 识别流程返回', { recognizedNames });
+      debugLog('>>> [Home] recognition returned', { count: recognizedNames.length });
 
       if (recognizedNames.length === 0) return;
 
@@ -59,7 +71,7 @@ export default function HomeScreen() {
       setShowUploadTip(true);
       setTimeout(() => setShowUploadTip(false), 2500);
     } catch (error) {
-      console.log('>>> [Home] 识别流程捕获错误', {
+      debugLog('>>> [Home] recognition error', {
         message: error instanceof Error ? error.message : String(error),
       });
       setUploadMessage(error instanceof Error ? error.message : '识别失败，请重试');

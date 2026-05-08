@@ -25,14 +25,19 @@ This document is the contract for the future Expo client.
 - CORS allowlist source:
   - `CORS_ALLOWED_ORIGINS` env variable, comma-separated
   - If unset, local/dev Expo origins such as `localhost`, `127.0.0.1`, LAN IPs, `*.expo.app`, `*.exp.direct` are allowed by default
-- Next config also applies API-wide CORS headers for `/api/:path*`, so Vercel-generated `OPTIONS` responses and browser/Expo Web debugging receive the same cross-origin contract.
+- API route helpers apply CORS headers dynamically. `next.config.ts` only applies generic security headers such as `X-Content-Type-Options`, `Referrer-Policy`, and `X-Frame-Options`.
 
 ## Security Rules
 
 - All model provider keys are server-only.
 - `AI_API_KEY` is read only inside server route modules and `apps/web-api/src/lib/server/openai.ts`.
 - No client-side module should import anything from `apps/web-api/src/lib/server/*`.
-- Current frontend request helpers call relative paths only and do not attach provider credentials.
+- `POST /api/vision`, `POST /api/recommend`, and `POST /api/detail` require `Authorization: Bearer <token>` when API authentication is enabled.
+- Production defaults to requiring API auth. Set `API_AUTH_REQUIRED=true` and `API_CLIENT_TOKEN` in `apps/web-api` or Vercel environment variables.
+- The Expo client sends the MVP app gate token from `EXPO_PUBLIC_API_AUTH_TOKEN`.
+- The current MVP app gate is not final user identity. When anonymous/user login is introduced, replace the static token with provider access tokens while keeping the same `Authorization` header path.
+- `SUPABASE_JWT_SECRET`, `SUPABASE_JWT_AUDIENCE`, and `SUPABASE_JWT_ISSUER` are reserved for Supabase Auth JWT validation.
+- Provider credentials must never be exposed to mobile or web clients.
 
 ## Error Model
 
@@ -62,7 +67,9 @@ Recognize ingredients from a base64 image.
 ### Validation
 
 - `image` is required
-- `image` must start with `data:image/`
+- `image` must be `data:image/jpeg|jpg|png|webp;base64,...`
+- JSON request body is capped at 3 MB
+- Decoded image payload is capped at 2 MB
 
 ### Success Response
 
@@ -89,6 +96,13 @@ Recognize ingredients from a base64 image.
 ```json
 {
   "success": false,
+  "error": "Unauthorized"
+}
+```
+
+```json
+{
+  "success": false,
   "error": "Missing image data"
 }
 ```
@@ -97,6 +111,15 @@ Recognize ingredients from a base64 image.
 {
   "success": false,
   "error": "Invalid image format"
+}
+```
+
+- `413`
+
+```json
+{
+  "success": false,
+  "error": "Image is too large"
 }
 ```
 
@@ -165,6 +188,9 @@ Generate recipe recommendations from user ingredients.
 
 - `ingredients` is required
 - `ingredients` must be a non-empty array
+- `ingredients` is capped at 30 unique items
+- each ingredient must be a non-empty string up to 30 characters
+- JSON request body is capped at 32 KB
 
 ### Success Response
 
@@ -194,6 +220,13 @@ Generate recipe recommendations from user ingredients.
 ### Error Responses
 
 - `400`
+
+```json
+{
+  "success": false,
+  "error": "Unauthorized"
+}
+```
 
 ```json
 {
@@ -268,8 +301,12 @@ Generate detailed cooking steps for a selected recipe.
 ### Validation
 
 - `recipeName` is required
-- `mainIngredients` should be an array
-- `availableIngredients` should be an array
+- `recipeName` must be up to 60 characters
+- `mainIngredients` must be a non-empty array
+- `availableIngredients` must be an array
+- ingredient arrays are capped at 30 unique items
+- each ingredient must be a non-empty string up to 30 characters
+- JSON request body is capped at 32 KB
 
 ### Success Response
 
@@ -294,6 +331,13 @@ Generate detailed cooking steps for a selected recipe.
 ### Error Responses
 
 - `400`
+
+```json
+{
+  "success": false,
+  "error": "Unauthorized"
+}
+```
 
 ```json
 {
@@ -339,22 +383,23 @@ Possible `mode` values:
 
 ## Client Call Sites
 
-Current web frontend still uses the same endpoints:
-
-- `src/lib/mockApi.ts` -> `POST /api/vision`
-- `src/lib/recommendApi.ts` -> `POST /api/recommend`
-- `src/app/recipe/[id]/page.tsx` -> `POST /api/detail`
+`apps/web-api` is now a headless API package. The old web frontend call sites were removed.
 
 Expo mobile client call sites:
 
-- `cooking_ideas_mobile/src/api/client.ts` -> shared API client for `/api/vision`, `/api/recommend`, `/api/detail`
-- `cooking_ideas_mobile/hooks/use-vision-picker.ts` -> image picker, JPEG compression, and `/api/vision` request
+- `apps/mobile-app/src/api/client.ts` -> shared API client for `/api/vision`, `/api/recommend`, `/api/detail`
+- `apps/mobile-app/hooks/use-vision-picker.ts` -> image picker, JPEG compression, and `/api/vision` request
 
 Mobile API base URL resolution:
 
 1. `EXPO_PUBLIC_API_BASE_URL` when explicitly configured
 2. Development LAN fallback: `http://<Expo host IP>:3000`
 3. Production fallback: `https://cooking-ideas.vercel.app`
+
+Mobile API auth token:
+
+- `EXPO_PUBLIC_API_AUTH_TOKEN` must match the backend `API_CLIENT_TOKEN` while the MVP app gate is enabled.
+- This token is intentionally an app-level gate, not a user account token.
 
 For Expo Go device testing, start the backend with:
 

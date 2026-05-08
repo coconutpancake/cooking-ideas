@@ -17,6 +17,8 @@ Base: `/api`
 | `POST` | `/api/detail` | Generate recipe steps and tips |
 | `GET` | `/api/detail` | Detail service status |
 
+`POST` routes require `Authorization: Bearer <token>` in production. For the MVP app gate, set `API_CLIENT_TOKEN` on the API and `EXPO_PUBLIC_API_AUTH_TOKEN` in the Expo app. When full user auth is introduced, set `SUPABASE_JWT_SECRET` and send user access tokens through the same header.
+
 ## Structure
 
 ```text

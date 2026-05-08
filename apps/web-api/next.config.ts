@@ -7,20 +7,16 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         headers: [
           {
-            key: "Access-Control-Allow-Origin",
-            value: "*",
+            key: "X-Content-Type-Options",
+            value: "nosniff",
           },
           {
-            key: "Access-Control-Allow-Methods",
-            value: "GET, POST, OPTIONS",
+            key: "Referrer-Policy",
+            value: "no-referrer",
           },
           {
-            key: "Access-Control-Allow-Headers",
-            value: "Content-Type, Authorization",
-          },
-          {
-            key: "Access-Control-Max-Age",
-            value: "86400",
+            key: "X-Frame-Options",
+            value: "DENY",
           },
         ],
       },

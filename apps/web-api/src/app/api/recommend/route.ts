@@ -2,6 +2,12 @@ import { NextRequest } from "next/server"
 
 import { jsonResponse, optionsResponse } from "@/lib/server/http"
 import { createServerOpenAIClient } from "@/lib/server/openai"
+import {
+  handleApiError,
+  parseJsonBody,
+  requireApiAuth,
+  validateRecommendationPayload,
+} from "@/lib/server/security"
 
 interface AIGeneratedRecipe {
   title: string
@@ -304,8 +310,13 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const ingredients = Array.isArray(body?.ingredients) ? body.ingredients : null
+    const authError = await requireApiAuth(request)
+    if (authError) {
+      return authError
+    }
+
+    const body = await parseJsonBody(request, "recommend")
+    const ingredients = validateRecommendationPayload(body)
 
     if (!ingredients || ingredients.length === 0) {
       return jsonResponse(
@@ -399,14 +410,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    return jsonResponse(
-      request,
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "服务器内部错误",
-      },
-      { status: 500 }
-    )
+    return handleApiError(request, error)
   }
 }
 

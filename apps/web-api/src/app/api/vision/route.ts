@@ -2,6 +2,12 @@ import { NextRequest } from "next/server"
 
 import { jsonResponse, optionsResponse } from "@/lib/server/http"
 import { createServerOpenAIClient } from "@/lib/server/openai"
+import {
+  handleApiError,
+  parseJsonBody,
+  requireApiAuth,
+  validateVisionPayload,
+} from "@/lib/server/security"
 
 interface IngredientItem {
   name: string
@@ -50,8 +56,13 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const image = typeof body?.image === "string" ? body.image : ""
+    const authError = await requireApiAuth(request)
+    if (authError) {
+      return authError
+    }
+
+    const body = await parseJsonBody(request, "vision")
+    const image = validateVisionPayload(body)
 
     if (!image) {
       return jsonResponse(
@@ -141,14 +152,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    return jsonResponse(
-      request,
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "服务器内部错误",
-      },
-      { status: 500 }
-    )
+    return handleApiError(request, error)
   }
 }
 

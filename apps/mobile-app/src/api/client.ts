@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 const PRODUCTION_API_BASE_URL = 'https://cooking-ideas.vercel.app';
 const LOCAL_API_PORT = 3000;
 const REQUEST_TIMEOUT = 30000;
+const API_AUTH_TOKEN = process.env.EXPO_PUBLIC_API_AUTH_TOKEN?.trim();
 
 interface ApiErrorResponse {
   success: false;
@@ -84,6 +85,25 @@ function buildUrl(baseUrl: string, path: string) {
   return new URL(path.replace(/^\//, ''), `${baseUrl}/`).toString();
 }
 
+function debugLog(message: string, details?: unknown) {
+  if (!__DEV__) {
+    return;
+  }
+
+  if (details === undefined) {
+    console.log(message);
+  } else {
+    console.log(message, details);
+  }
+}
+
+function buildHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    ...(API_AUTH_TOKEN ? { Authorization: `Bearer ${API_AUTH_TOKEN}` } : {}),
+  };
+}
+
 async function requestJson<T extends object>(path: string, body: unknown): Promise<T> {
   const payload = JSON.stringify(body);
   const baseUrls = getApiBaseUrls();
@@ -95,24 +115,23 @@ async function requestJson<T extends object>(path: string, body: unknown): Promi
     const startedAt = Date.now();
     const url = buildUrl(baseUrl, path);
 
-    console.log('>>> [ApiClient] 开始发送 fetch 请求', {
+    debugLog('>>> [ApiClient] fetch start', {
       path,
       url,
       payloadLength: payload.length,
       timeoutMs: REQUEST_TIMEOUT,
+      hasAuthToken: Boolean(API_AUTH_TOKEN),
     });
 
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(),
         body: payload,
         signal: controller.signal,
       });
 
-      console.log('>>> [ApiClient] fetch 请求收到响应', {
+      debugLog('>>> [ApiClient] fetch response', {
         path,
         url,
         status: response.status,
@@ -136,7 +155,7 @@ async function requestJson<T extends object>(path: string, body: unknown): Promi
     } catch (error) {
       lastError = error;
 
-      console.log('>>> [ApiClient] fetch 请求 catch 错误', {
+      debugLog('>>> [ApiClient] fetch error', {
         path,
         url,
         elapsedMs: Date.now() - startedAt,
@@ -177,9 +196,8 @@ export async function fetchRecipeDetail(params: {
 }
 
 export async function recognizeIngredients(image: string) {
-  console.log('>>> [ApiClient] recognizeIngredients 调用', {
+  debugLog('>>> [ApiClient] recognizeIngredients', {
     imageLength: image.length,
-    imagePrefix: image.slice(0, 30),
   });
 
   return requestJson<VisionResponse>('/api/vision', { image });

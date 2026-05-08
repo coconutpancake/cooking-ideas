@@ -2,12 +2,12 @@ import { NextRequest } from "next/server"
 
 import { jsonResponse, optionsResponse } from "@/lib/server/http"
 import { createServerOpenAIClient } from "@/lib/server/openai"
-
-interface DetailRequest {
-  recipeName: string
-  mainIngredients: string[]
-  availableIngredients: string[]
-}
+import {
+  handleApiError,
+  parseJsonBody,
+  requireApiAuth,
+  validateDetailPayload,
+} from "@/lib/server/security"
 
 interface ParsedStep {
   order: number
@@ -57,12 +57,13 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as Partial<DetailRequest>
-    const recipeName = typeof body.recipeName === "string" ? body.recipeName.trim() : ""
-    const mainIngredients = Array.isArray(body.mainIngredients) ? body.mainIngredients : []
-    const availableIngredients = Array.isArray(body.availableIngredients)
-      ? body.availableIngredients
-      : []
+    const authError = await requireApiAuth(request)
+    if (authError) {
+      return authError
+    }
+
+    const body = validateDetailPayload(await parseJsonBody(request, "detail"))
+    const { recipeName, mainIngredients, availableIngredients } = body
 
     if (!recipeName) {
       return jsonResponse(
@@ -135,14 +136,7 @@ export async function POST(request: NextRequest) {
       fullText,
     })
   } catch (error) {
-    return jsonResponse(
-      request,
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "服务器内部错误",
-      },
-      { status: 500 }
-    )
+    return handleApiError(request, error)
   }
 }
 
