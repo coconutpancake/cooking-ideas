@@ -285,16 +285,11 @@ export function handleApiError(request: NextRequest, error: unknown): NextRespon
     )
   }
 
+  console.error("[api] unhandled server error", error)
+
   return jsonResponse(
     request,
-    {
-      success: false,
-      error: isProduction()
-        ? "Internal server error"
-        : error instanceof Error
-          ? error.message
-          : "Internal server error",
-    },
+    { success: false, error: "服务器开小差了，请稍后再试" },
     { status: 500 }
   )
 }

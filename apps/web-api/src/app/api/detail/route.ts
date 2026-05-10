@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 
 import { jsonResponse, optionsResponse } from "@/lib/server/http"
 import { createServerOpenAIClient } from "@/lib/server/openai"
+import { rateLimitRequest } from "@/lib/server/rate-limit"
 import {
   handleApiError,
   parseJsonBody,
@@ -71,6 +72,11 @@ export async function POST(request: NextRequest) {
         { success: false, error: "缺少菜谱名称" },
         { status: 400 }
       )
+    }
+
+    const rateLimitError = rateLimitRequest(request, "detail")
+    if (rateLimitError) {
+      return rateLimitError
     }
 
     if (!process.env.AI_API_KEY) {
