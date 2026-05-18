@@ -10,6 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "cn.potinspire.app",
       "infoPlist": {
         "CFBundleDevelopmentRegion": "zh_CN",
         "CFBundleAllowMixedLocalizations": true,
@@ -28,7 +29,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -59,6 +63,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "250cc500-906c-4f8e-b9c1-8458d8ddc117"
+      }
     }
   }
 }
