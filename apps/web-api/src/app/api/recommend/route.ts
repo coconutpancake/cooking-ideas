@@ -21,13 +21,13 @@ export async function POST(request: NextRequest) {
       return authError
     }
 
-    const ingredients = validateRecommendationPayload(await parseJsonBody(request, "recommend"))
+    const recommendationContext = validateRecommendationPayload(await parseJsonBody(request, "recommend"))
     const rateLimitError = rateLimitRequest(request, "recommend")
     if (rateLimitError) {
       return rateLimitError
     }
 
-    const data = await generateRecipeRecommendations(ingredients)
+    const data = await generateRecipeRecommendations(recommendationContext)
 
     return jsonResponse(request, {
       success: true,

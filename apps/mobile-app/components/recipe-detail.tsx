@@ -176,7 +176,7 @@ export function RetryButton({ onPress }: { onPress: () => void }) {
       activeOpacity={0.8}
       onPress={onPress}
       className="mt-4 self-center rounded-full bg-orange-500 px-6 py-3">
-      <Text className="text-sm font-medium text-white">返回推荐</Text>
+      <Text className="text-sm font-medium text-white">重试</Text>
     </TouchableOpacity>
   );
 }

@@ -174,13 +174,24 @@ Possible `mode` values:
 
 ## POST /api/recommend
 
-Generate recipe recommendations from user ingredients.
+Generate personalized recipe recommendations from the user's fridge and local preference context.
 
 ### Request
 
 ```json
 {
-  "ingredients": ["tomato", "egg", "tofu"]
+  "ingredients": ["猪肉", "黄瓜", "意大利面"],
+  "pinnedIngredients": ["猪肉"],
+  "mealPreference": "comfort",
+  "userPreferences": {
+    "goal": "认真吃好每一顿",
+    "tastes": ["无辣不欢", "轻食西餐"],
+    "avoidances": ["不吃香菜"],
+    "completedOnboarding": true,
+    "updatedAt": 1779800000000
+  },
+  "excludeRecipeTitles": ["黄瓜炒肉片"],
+  "pageSize": 10
 }
 ```
 
@@ -190,6 +201,12 @@ Generate recipe recommendations from user ingredients.
 - `ingredients` must be a non-empty array
 - `ingredients` is capped at 30 unique items
 - each ingredient must be a non-empty string up to 30 characters
+- `pinnedIngredients` is optional and capped at 30 unique items
+- `mealPreference` is optional. Current mobile values are `speed`, `comfort`, `light`, `protein`, `lessOil`
+- `userPreferences` is optional and may include `goal`, `tastes`, `avoidances`, and `completedOnboarding`
+- `userPreferences.tastes` and `userPreferences.avoidances` are capped at 20 items each
+- `excludeRecipeTitles` is optional and used by loading-more requests to reduce duplicate recipes
+- `pageSize` is optional and controls the number of requested recommendations
 - JSON request body is capped at 32 KB
 
 ### Success Response
@@ -201,21 +218,36 @@ Generate recipe recommendations from user ingredients.
     "recommendations": [
       {
         "recipeId": "ai-1712345678901-0",
-        "title": "Tomato Egg Stir Fry",
-        "emoji": "*",
-        "cookingMethod": "stir-fry",
+        "title": "黄瓜炒肉片",
+        "emoji": "🥒🥩",
+        "cookingMethod": "炒",
         "matchingScore": 1,
-        "availableMainIngredients": ["tomato", "egg"],
+        "availableMainIngredients": ["猪肉", "黄瓜"],
         "missingMainIngredients": [],
         "isAllAvailable": true,
-        "seasonings": ["salt"],
-        "cookingTime": 15
+        "seasonings": ["生抽", "盐"],
+        "cookingTime": 15,
+        "strategy": "A"
       }
     ],
     "totalCandidates": 8
   }
 }
 ```
+
+### Recommendation Rules
+
+- Matching score is calculated from `mainIngredients` only. Seasonings do not affect matching.
+- Sort order: matching score desc, contains pinned ingredient first, strategy `A > B > C`, fewer missing main ingredients, shorter cooking time.
+- Strategy meaning:
+  - `A`: pinned ingredients + meal preference + long-term preferences
+  - `B`: pinned ingredients + meal preference
+  - `C`: based on current fridge ingredients with more exploratory variation
+- Pinned ingredients are the user's explicit current intent and may exceed the "same main ingredient appears at most twice" diversity rule.
+- Generic meat can match normal cut forms, such as pork with sliced pork or minced pork. It must not match strict parts, such as ribs, liver, wings, claws, beef brisket, or steak.
+- Recipe titles must be consistent with the returned main ingredient array. If a title names a main ingredient, the `mainIngredients` list must include it.
+- Seasoning-like items, such as tomato sauce, soy sauce, cooking wine, oyster sauce, starch, oil, salt, sugar, vinegar, pepper powder, chili powder, bean paste, ginger, garlic, water, and stock, belong in `seasonings`.
+- Multi-select taste preferences should be covered across the recommendation list. They may also be reasonably combined, such as spicy Western-style dishes, when the result still follows real cooking logic and uses available ingredients.
 
 ### Error Responses
 

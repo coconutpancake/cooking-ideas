@@ -14,6 +14,36 @@ import {
 import type { RecipeDetail } from '@/lib/types';
 import { fetchRecipeDetail } from '@/src/api/client';
 import { getCachedRecipeRecommendation, getIngredients, getRecipeDetailCache, saveRecipeDetailCache } from '@/lib/storage';
+import {
+  classifyRecipeIngredients,
+  estimateMainIngredientAmount,
+  estimateSeasoningAmount,
+} from '@/lib/recipe-ingredients';
+
+const commonStepHighlightKeywords = [
+  '葱',
+  '姜',
+  '蒜',
+  '盐',
+  '糖',
+  '酱油',
+  '生抽',
+  '老抽',
+  '醋',
+  '料酒',
+  '蚝油',
+  '淀粉',
+  '胡椒粉',
+  '辣椒',
+  '花椒',
+  '八角',
+  '香叶',
+  '豆瓣酱',
+  '鸡精',
+  '香油',
+  '食用油',
+  '清水',
+];
 
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,6 +51,7 @@ export default function RecipeDetailScreen() {
   const [availableNames, setAvailableNames] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -58,10 +89,15 @@ export default function RecipeDetailScreen() {
           return;
         }
 
-        const mainIngredientNames = [
+        const rawMainIngredientNames = [
           ...recommendation.availableMainIngredients,
           ...recommendation.missingMainIngredients,
         ];
+        const classifiedIngredients = classifyRecipeIngredients(
+          rawMainIngredientNames,
+          recommendation.seasonings,
+        );
+        const mainIngredientNames = classifiedIngredients.mainIngredients;
         const response = await fetchRecipeDetail({
           recipeName: recommendation.title,
           mainIngredients: mainIngredientNames,
@@ -72,8 +108,14 @@ export default function RecipeDetailScreen() {
           title: recommendation.title,
           cookingTime: recommendation.cookingTime,
           tags: [recommendation.cookingMethod, '2人份'],
-          mainIngredients: mainIngredientNames.map((name) => ({ name, amount: '适量' })),
-          seasonings: recommendation.seasonings.map((name) => ({ name, amount: '适量' })),
+          mainIngredients: mainIngredientNames.map((name) => ({
+            name,
+            amount: estimateMainIngredientAmount(name),
+          })),
+          seasonings: classifiedIngredients.seasonings.map((name) => ({
+            name,
+            amount: estimateSeasoningAmount(name),
+          })),
           steps: response.steps,
           tips: response.tips || '',
         };
@@ -83,7 +125,12 @@ export default function RecipeDetailScreen() {
         await saveRecipeDetailCache(nextRecipe);
       } catch (loadError) {
         if (!isMounted) return;
-        setError(loadError instanceof Error ? loadError.message : '获取菜谱详情失败');
+        const message = loadError instanceof Error ? loadError.message : '';
+        setError(
+          message.includes('频繁') || message.includes('429')
+            ? '请求太频繁啦，大厨需要喝口水休息一下'
+            : '服务器开小差了，请稍后再试',
+        );
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -96,13 +143,14 @@ export default function RecipeDetailScreen() {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, retryKey]);
 
   const highlightKeywords = useMemo(() => {
     if (!recipe) return [];
     return [
       ...recipe.mainIngredients.map((item) => item.name),
       ...recipe.seasonings.map((item) => item.name),
+      ...commonStepHighlightKeywords,
     ];
   }, [recipe]);
 
@@ -122,7 +170,10 @@ export default function RecipeDetailScreen() {
       <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
         <View className="flex-1 items-center justify-center px-5">
           <Text className="text-sm text-gray-400">{error || '菜谱不存在'}</Text>
-          <RetryButton onPress={() => router.replace('/recommend')} />
+          <RetryButton onPress={() => setRetryKey((current) => current + 1)} />
+          <TouchableOpacity activeOpacity={0.75} onPress={() => router.replace('/recommend')}>
+            <Text className="mt-4 text-sm text-gray-400">返回推荐</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );

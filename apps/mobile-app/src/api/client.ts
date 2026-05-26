@@ -1,5 +1,6 @@
-import type { RecipeRecommendation, RecipeStep } from '@/lib/types';
+import type { RecipeRecommendation, RecipeStep, RecommendationContext } from '@/lib/types';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const PRODUCTION_API_BASE_URL = 'https://cooking-ideas.vercel.app';
 const LOCAL_API_PORT = 3000;
@@ -65,14 +66,21 @@ function getExpoHostName() {
 
 function getLocalApiBaseUrl() {
   const hostName = getExpoHostName();
+  if (!hostName && Platform.OS === 'web' && __DEV__) {
+    return `http://localhost:${LOCAL_API_PORT}`;
+  }
+
   return hostName ? `http://${hostName}:${LOCAL_API_PORT}` : null;
 }
 
 function getApiBaseUrls() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const localApiBaseUrl = getLocalApiBaseUrl();
+  const isConfiguredProduction = configuredUrl === PRODUCTION_API_BASE_URL;
   const candidates = [
+    __DEV__ && isConfiguredProduction ? localApiBaseUrl : null,
     configuredUrl || null,
-    __DEV__ ? getLocalApiBaseUrl() : null,
+    __DEV__ && !isConfiguredProduction ? localApiBaseUrl : null,
     PRODUCTION_API_BASE_URL,
   ];
 
@@ -97,14 +105,19 @@ function debugLog(message: string, details?: unknown) {
   }
 }
 
-function buildHeaders() {
+function buildHeaders(deviceId?: string | null) {
   return {
     'Content-Type': 'application/json',
+    ...(deviceId ? { 'X-Cooking-Device-Id': deviceId } : {}),
     ...(API_AUTH_TOKEN ? { Authorization: `Bearer ${API_AUTH_TOKEN}` } : {}),
   };
 }
 
-async function requestJson<T extends object>(path: string, body: unknown): Promise<T> {
+async function requestJson<T extends object>(
+  path: string,
+  body: unknown,
+  options: { deviceId?: string | null } = {},
+): Promise<T> {
   const payload = JSON.stringify(body);
   const baseUrls = getApiBaseUrls();
   let lastError: unknown;
@@ -126,7 +139,7 @@ async function requestJson<T extends object>(path: string, body: unknown): Promi
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: buildHeaders(),
+        headers: buildHeaders(options.deviceId),
         body: payload,
         signal: controller.signal,
       });
@@ -183,8 +196,8 @@ async function requestJson<T extends object>(path: string, body: unknown): Promi
   );
 }
 
-export async function fetchRecommendations(ingredients: string[]) {
-  return requestJson<RecommendResponse>('/api/recommend', { ingredients });
+export async function fetchRecommendations(context: RecommendationContext, deviceId?: string | null) {
+  return requestJson<RecommendResponse>('/api/recommend', context, { deviceId });
 }
 
 export async function fetchRecipeDetail(params: {

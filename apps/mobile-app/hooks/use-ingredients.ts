@@ -8,12 +8,45 @@ import {
   saveIngredients,
 } from '@/lib/storage';
 
+const meatKeywords = [
+  '鸡',
+  '鸭',
+  '鱼',
+  '虾',
+  '牛',
+  '猪',
+  '羊',
+  '肉',
+  '蛋',
+  '奶',
+  '排骨',
+  '火腿',
+];
+
+const vegetableKeywords = [
+  '菜',
+  '番茄',
+  '西红柿',
+  '土豆',
+  '胡萝卜',
+  '洋葱',
+  '葱',
+  '姜',
+  '蒜',
+  '豆角',
+  '豆腐',
+  '蘑菇',
+  '青椒',
+  '黄瓜',
+  '茄子',
+];
+
 export function guessIngredientCategory(name: string): CategoryKey {
-  if (/(鸡|牛|猪|羊|鱼|虾|肉|蛋|奶|排骨|培根|火腿)/.test(name)) {
+  if (meatKeywords.some((keyword) => name.includes(keyword))) {
     return 'meat';
   }
 
-  if (/(菜|番茄|西红柿|椒|蘑|菇|瓜|豆角|土豆|胡萝卜|洋葱|葱|姜|蒜)/.test(name)) {
+  if (vegetableKeywords.some((keyword) => name.includes(keyword))) {
     return 'vegetable';
   }
 
@@ -64,6 +97,17 @@ export function useIngredients() {
     [ingredients, persist],
   );
 
+  const togglePinned = useCallback(
+    async (id: string) => {
+      await persist(
+        ingredients.map((item) =>
+          item.id === id ? { ...item, isPinned: !item.isPinned } : item,
+        ),
+      );
+    },
+    [ingredients, persist],
+  );
+
   const add = useCallback(
     async (name: string, category?: CategoryKey) => {
       const normalized = name.trim();
@@ -75,6 +119,7 @@ export function useIngredients() {
           id: `${Date.now()}`,
           name: normalized,
           category: category ?? guessIngredientCategory(normalized),
+          isPinned: false,
         },
       ]);
     },
@@ -91,6 +136,7 @@ export function useIngredients() {
           id: `${Date.now()}-${name}`,
           name,
           category: guessIngredientCategory(name),
+          isPinned: false,
         }));
 
       if (additions.length === 0) {
@@ -112,5 +158,6 @@ export function useIngredients() {
     add,
     addRecognizedIngredients,
     remove,
+    togglePinned,
   };
 }

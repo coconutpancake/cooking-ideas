@@ -1,6 +1,10 @@
-# 做饭灵感 App - 软件设计文档 (SDD)
+# 小锅灵感 App - 软件设计文档 (SDD V2.0)
 
 ## 1. 技术架构
+
+### 1.0 当前实现说明
+
+本文档最初面向 V1.0 MVP，现已作为 V2.0 的持续更新版 SDD。V2.0 已在 Expo 移动端升级为三 Tab 架构，并新增本地偏好、标星食材、推荐上下文、我的页本地资料等能力。V2.0 的最新实施摘要见 `docs/specs/prdV2.0-implementation-summary.md`。
 
 ### 1.1 技术栈
 - **仓库架构**：Monorepo 单体大仓库
@@ -120,7 +124,20 @@ Response: {
 ### 3.2 菜谱推荐 API
 ```
 POST /api/recommend
-Request: { ingredients: string[] }
+Request: {
+  ingredients: string[],
+  pinnedIngredients?: string[],
+  mealPreference?: "speed" | "comfort" | "light" | "protein" | "lessOil" | null,
+  userPreferences?: {
+    goal: string,
+    tastes: string[],
+    avoidances: string[],
+    completedOnboarding: boolean,
+    updatedAt: number
+  } | null,
+  excludeRecipeTitles?: string[],
+  pageSize?: number
+}
 Response: {
   success: boolean,
   data?: {
@@ -136,10 +153,11 @@ Response: {
 ## 4. 推荐排序规则
 
 ### 4.1 排序优先级
-1. **完全匹配优先**：`isAllAvailable = true` 的菜谱排在前面
-2. **匹配度排序**：按 `matchingScore` 降序
-3. **缺少量排序**：按 `missingMainIngredients.length` 升序
-4. **时间排序**：按 `cookingTime` 升序
+1. **匹配度排序**：按 `matchingScore` 降序
+2. **标星食材优先**：同匹配度下，包含标星食材的推荐排在前面
+3. **策略排序**：同匹配度和标星状态下，按 `A > B > C` 排序
+4. **缺少量排序**：按 `missingMainIngredients.length` 升序
+5. **时间排序**：按 `cookingTime` 升序
 
 ### 4.2 匹配度计算公式
 ```
@@ -147,6 +165,14 @@ matchingScore = availableMainIngredients.length / mainIngredients.length
 ```
 - 仅计算主食材，调料不参与
 - 返回值保留两位小数
+- 标星食材代表用户本次明确意图，不直接改变匹配度公式，但会影响同分排序
+
+### 4.3 主食材和调料边界
+
+- 主食材：肉、蛋、豆制品、蔬菜、主食等决定菜品主体的食材。
+- 调料与辅料：油、盐、糖、醋、生抽、老抽、料酒、蚝油、淀粉、胡椒粉、辣椒粉、豆瓣酱、番茄酱、黄豆酱、甜面酱、葱姜蒜、清水、高汤等。
+- 番茄酱不是番茄，不能进入主食材，也不能按“半个”估量。
+- 通用肉类可以匹配常规切配形态，但不能匹配特殊部位，例如猪肉不等于排骨/猪肝，牛肉不等于牛排/牛腩，鸡肉不等于鸡翅/鸡爪。
 
 ---
 

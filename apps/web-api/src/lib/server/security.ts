@@ -21,6 +21,19 @@ interface DetailPayload {
   availableIngredients: string[]
 }
 
+export interface RecommendationPayload {
+  ingredients: string[]
+  pinnedIngredients: string[]
+  mealPreference: string | null
+  userPreferences: {
+    goal: string
+    tastes: string[]
+    avoidances: string[]
+  } | null
+  excludeRecipeTitles: string[]
+  pageSize: number
+}
+
 const MAX_VISION_JSON_BYTES = 3 * 1024 * 1024
 const MAX_VISION_IMAGE_BYTES = 2 * 1024 * 1024
 const MAX_STANDARD_JSON_BYTES = 32 * 1024
@@ -254,9 +267,38 @@ export function validateVisionPayload(body: unknown): string {
   return image
 }
 
-export function validateRecommendationPayload(body: unknown): string[] {
+export function validateRecommendationPayload(body: unknown): RecommendationPayload {
   const data = assertObject(body)
-  return normalizeStringList(data.ingredients, "ingredients", { minItems: 1 })
+  const rawPreferences =
+    data.userPreferences && typeof data.userPreferences === "object" && !Array.isArray(data.userPreferences)
+      ? (data.userPreferences as Record<string, unknown>)
+      : null
+
+  return {
+    ingredients: normalizeStringList(data.ingredients, "ingredients", { minItems: 1 }),
+    pinnedIngredients: Array.isArray(data.pinnedIngredients)
+      ? normalizeStringList(data.pinnedIngredients, "pinnedIngredients")
+      : [],
+    mealPreference: typeof data.mealPreference === "string" ? data.mealPreference.trim().slice(0, 30) : null,
+    userPreferences: rawPreferences
+      ? {
+          goal: typeof rawPreferences.goal === "string" ? rawPreferences.goal.trim().slice(0, 30) : "",
+          tastes: Array.isArray(rawPreferences.tastes)
+            ? normalizeStringList(rawPreferences.tastes, "tastes", { maxItems: 20 })
+            : [],
+          avoidances: Array.isArray(rawPreferences.avoidances)
+            ? normalizeStringList(rawPreferences.avoidances, "avoidances", { maxItems: 20 })
+            : [],
+        }
+      : null,
+    excludeRecipeTitles: Array.isArray(data.excludeRecipeTitles)
+      ? normalizeStringList(data.excludeRecipeTitles, "excludeRecipeTitles", { maxItems: 50 })
+      : [],
+    pageSize:
+      typeof data.pageSize === "number" && Number.isFinite(data.pageSize)
+        ? Math.min(Math.max(Math.round(data.pageSize), 1), 12)
+        : 10,
+  }
 }
 
 export function validateDetailPayload(body: unknown): DetailPayload {
