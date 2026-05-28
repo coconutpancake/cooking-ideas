@@ -18,7 +18,8 @@
           "zh_CN",
           "zh-Hans",
           "zh"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
