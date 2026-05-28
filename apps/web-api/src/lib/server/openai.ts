@@ -2,7 +2,7 @@ import "server-only"
 
 import OpenAI from "openai"
 
-const DEFAULT_AI_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+const DEFAULT_AI_BASE_URL = "https://api.xiaomimimo.com/v1"
 
 export function getRequiredEnv(name: "AI_API_KEY"): string
 export function getRequiredEnv(name: string): string {

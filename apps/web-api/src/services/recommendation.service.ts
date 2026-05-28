@@ -1,5 +1,7 @@
 import "server-only"
 
+import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions"
+
 import { createServerOpenAIClient } from "@/lib/server/openai"
 import { ApiRequestError, type RecommendationPayload } from "@/lib/server/security"
 
@@ -15,6 +17,14 @@ import {
 import type { Recommendation } from "./recommendation-types"
 
 const MIN_MATCHING_SCORE = 0.4
+
+type MiMoCompletionParams = ChatCompletionCreateParamsNonStreaming & {
+  extra_body?: {
+    thinking: {
+      type: "disabled"
+    }
+  }
+}
 
 function formatList(items: string[], fallback = "无"): string {
   return items.length > 0 ? items.join("、") : fallback
@@ -44,25 +54,28 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
     "策略：A=标星+本餐+长期约40%，B=标星+本餐约30%，C=现有食材发散约30%。有标星时 A/B 必含至少一个标星食材。\n" +
     "规则：同一非标星主食材最多出现2次；覆盖炒/煮/蒸/烤/凉拌等不同做法；避开忌口和已展示菜名；通用肉类不要当具体部位，如猪肉不等于排骨/猪蹄。\n" +
     "菜名要短且真实，优先 4-8 个汉字，最多10个。菜名出现的所有主食材必须在 m 中。m 只放菜品主体食材；油盐糖醋、生抽老抽、料酒蚝油、淀粉、胡椒粉、辣椒粉、酱料、葱姜蒜、水/高汤等放 s。番茄酱不是番茄。\n" +
-    '只输出紧凑 JSON 数组：[{"t":"菜名","e":"🍅🍳","m":["主食材"],"s":["调料"],"c":"炒","d":15,"strategy":"A"}]。不要解释。'
+    '只输出紧凑 JSON 对象：{"recipes":[{"t":"菜名","e":"🍅🍳","m":["主食材"],"s":["调料"],"c":"炒","d":15,"strategy":"A"}]}。不要解释。'
 
   const buildMessages = (userPrompt: string) =>
     [
       {
         role: "system" as const,
         content:
-          "你是一个专业中餐厨师。你必须严格返回指定数量的菜谱，主食材不能重复超过2次。输出必须是完整有效的JSON数组。",
+          "你是一个专业中餐厨师。你必须严格返回指定数量的菜谱，主食材不能重复超过2次。输出必须是完整有效的JSON对象。",
       },
       { role: "user" as const, content: userPrompt },
     ]
 
   const requestRecipes = async (userPrompt: string, temperature: number) => {
-    const response = await client.chat.completions.create({
+    const completionParams: MiMoCompletionParams = {
       model,
       messages: buildMessages(userPrompt),
       temperature,
       max_tokens: maxTokens,
-    })
+      response_format: { type: "json_object" },
+      extra_body: { thinking: { type: "disabled" } },
+    }
+    const response = await client.chat.completions.create(completionParams)
 
     return response.choices?.[0]?.message?.content || ""
   }
@@ -73,7 +86,7 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
   if (parsedRecipes.length === 0) {
     const retryPrompt =
       prompt +
-      "\n\n上一次输出无法解析。这一次只返回严格 JSON 数组，不要 Markdown，不要解释，不要多余文字。"
+      '\n\n上一次输出无法解析。这一次只返回严格 JSON 对象，格式必须是 {"recipes":[...]}，不要 Markdown，不要解释，不要多余文字。'
     aiResponse = await requestRecipes(retryPrompt, 0.3)
     parsedRecipes = parseRecommendationResponse(aiResponse, pageSize)
   }

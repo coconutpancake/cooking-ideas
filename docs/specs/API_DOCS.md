@@ -160,8 +160,8 @@ Recognize ingredients from a base64 image.
 ```json
 {
   "status": "ok",
-  "provider": "aliyun-qwen",
-  "model": "qwen-vl-plus",
+  "provider": "xiaomi-mimo",
+  "model": "mimo-v2.5",
   "configured": true,
   "mode": "real"
 }

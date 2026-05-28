@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
   return jsonResponse(request, {
     status: "ok",
-    provider: "aliyun-qwen",
+    provider: "xiaomi-mimo",
     model: process.env.VISION_MODEL_NAME || DEFAULT_VISION_MODEL,
     configured: hasKey,
     mode: hasKey ? "real" : "not_configured",

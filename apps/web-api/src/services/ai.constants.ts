@@ -1,2 +1,2 @@
-export const DEFAULT_TEXT_MODEL = "qwen-plus"
-export const DEFAULT_VISION_MODEL = "qwen-vl-plus"
+export const DEFAULT_TEXT_MODEL = "mimo-v2.5"
+export const DEFAULT_VISION_MODEL = "mimo-v2.5"

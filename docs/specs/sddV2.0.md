@@ -15,7 +15,7 @@
 - **状态管理**：Zustand (UI状态) + TanStack Query (服务端状态)
 - **动画**：Framer Motion
 - **图标**：Lucide React
-- **AI集成**：OpenAI SDK (兼容阿里云通义千问)
+- **AI集成**：OpenAI SDK (兼容小米 MiMo / OpenAI-compatible API)
 
 ### 1.2 项目结构
 ```
@@ -239,9 +239,10 @@ AI 返回食材列表
 | 变量 | 说明 |
 |------|------|
 | AI_API_KEY | 阿里云 API Key |
-| AI_BASE_URL | API 基础URL |
-| VISION_MODEL_NAME | 视觉模型名称（qwen-vl-plus） |
-| TEXT_MODEL_NAME | 文本模型名称（qwen-plus） |
+| AI_BASE_URL | API 基础URL，默认 `https://api.xiaomimimo.com/v1` |
+| VISION_MODEL_NAME | 视觉模型名称（默认 `mimo-v2.5`） |
+| TEXT_MODEL_NAME | 文本推荐模型名称（默认 `mimo-v2.5`） |
+| DETAIL_MODEL_NAME | 菜谱详情模型名称（默认 `mimo-v2.5`） |
 
 ---
 

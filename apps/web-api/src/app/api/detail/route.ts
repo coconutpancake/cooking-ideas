@@ -9,6 +9,7 @@ import {
   requireApiAuth,
   validateDetailPayload,
 } from "@/lib/server/security"
+import { DEFAULT_TEXT_MODEL } from "@/services/ai.service"
 
 interface ParsedStep {
   order: number
@@ -27,8 +28,7 @@ interface StructuredRecipeDetail {
   tips?: string
 }
 
-const DEFAULT_DETAIL_MODEL = "qwen-turbo"
-const FALLBACK_TEXT_MODEL = "qwen-plus"
+const DEFAULT_DETAIL_MODEL = DEFAULT_TEXT_MODEL
 
 function formatIngredients(availableIngredients: string[], allIngredients: string[]): string {
   const availableSet = new Set(availableIngredients.map((item) => item.toLowerCase()))
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
 
     const client = createServerOpenAIClient()
     const model = process.env.DETAIL_MODEL_NAME || DEFAULT_DETAIL_MODEL
-    const fallbackModel = process.env.TEXT_MODEL_NAME || FALLBACK_TEXT_MODEL
+    const fallbackModel = process.env.TEXT_MODEL_NAME || DEFAULT_TEXT_MODEL
     const ingredientList = formatIngredients(availableIngredients, mainIngredients)
     const seasoningText = seasonings.length > 0 ? seasonings.join("、") : "按家常需要补充"
 
@@ -201,6 +201,8 @@ export async function POST(request: NextRequest) {
       ],
       temperature: 0.5,
       max_tokens: 800,
+      response_format: { type: "json_object" as const },
+      extra_body: { thinking: { type: "disabled" } },
     }
 
     let completion

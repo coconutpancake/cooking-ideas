@@ -8,6 +8,19 @@ The user-facing frontend has moved to `apps/mobile-app`. This package only keeps
 
 Base: `/api`
 
+## Model Provider
+
+The API uses an OpenAI-compatible client. The current default provider is Xiaomi MiMo:
+
+```env
+AI_BASE_URL=https://api.xiaomimimo.com/v1
+TEXT_MODEL_NAME=mimo-v2.5
+VISION_MODEL_NAME=mimo-v2.5
+DETAIL_MODEL_NAME=mimo-v2.5
+```
+
+`AI_API_KEY` must be configured only on the server or Vercel environment.
+
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/vision` | Recognize ingredients from a base64 image |
@@ -65,4 +78,5 @@ npm run dev
 npm run build
 npm run start
 npm run lint
+npm run test:smoke
 ```

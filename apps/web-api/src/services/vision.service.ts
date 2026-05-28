@@ -1,5 +1,7 @@
 import "server-only"
 
+import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions"
+
 import { createServerOpenAIClient } from "@/lib/server/openai"
 
 import { DEFAULT_VISION_MODEL } from "./ai.constants"
@@ -14,6 +16,13 @@ const VISION_SYSTEM_PROMPT =
   "优先输出生鲜食材和可直接用于做菜的食物。不要识别厨具、餐具、秤、桌面、包装图片、玩具、显示器画面；背景中的罐头、奶粉、饮品、酱料和瓶装调料暂不输出。" +
   '只输出 JSON，不要解释。JSON格式：{"ingredients":[{"name":"食材名称","amount":"份量"}]}'
 
+type MiMoCompletionParams = ChatCompletionCreateParamsNonStreaming & {
+  extra_body?: {
+    thinking: {
+      type: "disabled"
+    }
+  }
+}
 
 function parseIngredients(content: string): IngredientItem[] | null {
   const jsonMatch = content.match(/\{[\s\S]*\}/)
@@ -54,7 +63,7 @@ export async function recognizeIngredientsFromImage(image: string): Promise<{
   const client = createServerOpenAIClient()
   const model = process.env.VISION_MODEL_NAME || DEFAULT_VISION_MODEL
 
-  const response = await client.chat.completions.create({
+  const completionParams: MiMoCompletionParams = {
     model,
     messages: [
       {
@@ -75,7 +84,10 @@ export async function recognizeIngredientsFromImage(image: string): Promise<{
     ],
     temperature: 0.1,
     max_tokens: 500,
-  })
+    response_format: { type: "json_object" },
+    extra_body: { thinking: { type: "disabled" } },
+  }
+  const response = await client.chat.completions.create(completionParams)
 
   const content = response.choices?.[0]?.message?.content
 

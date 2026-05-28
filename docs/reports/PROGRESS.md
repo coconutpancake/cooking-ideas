@@ -15,7 +15,7 @@
 
 - 移动端：Expo Router、React Native、NativeWind、AsyncStorage
 - API：Next.js Route Handler、TypeScript、OpenAI SDK 兼容调用
-- AI 模型：通义千问文本模型与视觉模型，通过环境变量配置
+- AI 模型：小米 MiMo 文本与视觉能力，通过环境变量配置
 - 本地存储：食材、偏好、本地资料、设备 ID、推荐缓存、详情缓存
 - 后端 AI 服务层：`ai.service.ts` 保持对外薄入口；视觉识别、推荐编排、推荐 prompt、推荐解析、推荐匹配/归一化分别拆分维护。
 - 移动端偏好层：偏好类型保留在 `lib/types.ts`，默认标签和旧标签过滤规则维护在 `lib/preferences.ts`，UI 组件只负责展示和交互。
