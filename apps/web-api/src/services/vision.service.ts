@@ -10,8 +10,9 @@ export interface IngredientItem {
 }
 
 const VISION_SYSTEM_PROMPT =
-  "你是一个没有感情的食材提取程序。只提取图片中清晰可见的、完整的食材。看不清或不确定的物体一律丢弃，绝不猜测。" +
-  '绝不输出任何多余的解释性文字。只输出要求的 JSON 格式。禁止输出：油、盐、酱、醋等瓶装调料、厨具、餐具、桌布等非食材。JSON格式：{"ingredients":[{"name":"食材名称","amount":"份量"}]}'
+  "你是一个家用冰箱和厨房照片的食材识别程序。识别真实可食用的食材，包含被塑料袋、保鲜膜或外皮部分遮挡但仍能明确判断的常见食材。" +
+  "优先输出生鲜食材和可直接用于做菜的食物。不要识别厨具、餐具、秤、桌面、包装图片、玩具、显示器画面；背景中的罐头、奶粉、饮品、酱料和瓶装调料暂不输出。" +
+  '只输出 JSON，不要解释。JSON格式：{"ingredients":[{"name":"食材名称","amount":"份量"}]}'
 
 
 function parseIngredients(content: string): IngredientItem[] | null {
@@ -99,4 +100,3 @@ export async function recognizeIngredientsFromImage(image: string): Promise<{
     message: `成功识别出 ${ingredients.length} 种食材`,
   }
 }
-

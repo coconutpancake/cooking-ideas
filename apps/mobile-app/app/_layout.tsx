@@ -1,7 +1,10 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { configureSystemTextScaling } from '@/lib/text-scaling';
 import 'react-native-reanimated';
 import '../global.css';
+
+configureSystemTextScaling();
 
 export default function RootLayout() {
   return (

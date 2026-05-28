@@ -15,7 +15,20 @@ interface ParsedStep {
   description: string
 }
 
-const DEFAULT_TEXT_MODEL = "qwen-plus"
+interface IngredientAmount {
+  name: string
+  amount: string
+}
+
+interface StructuredRecipeDetail {
+  mainIngredients: IngredientAmount[]
+  seasonings: IngredientAmount[]
+  steps: ParsedStep[]
+  tips?: string
+}
+
+const DEFAULT_DETAIL_MODEL = "qwen-turbo"
+const FALLBACK_TEXT_MODEL = "qwen-plus"
 
 function formatIngredients(availableIngredients: string[], allIngredients: string[]): string {
   const availableSet = new Set(availableIngredients.map((item) => item.toLowerCase()))
@@ -52,6 +65,78 @@ function parseSteps(text: string): ParsedStep[] {
   return steps
 }
 
+function parseIngredientAmounts(value: unknown): IngredientAmount[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null
+      }
+
+      const record = item as Record<string, unknown>
+      const name = typeof record.name === "string" ? record.name.trim() : ""
+      const amount = typeof record.amount === "string" ? record.amount.trim() : ""
+
+      return name && amount ? { name, amount } : null
+    })
+    .filter((item): item is IngredientAmount => Boolean(item))
+}
+
+function parseStructuredDetail(content: string): StructuredRecipeDetail | null {
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+
+  if (!jsonMatch) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
+    const mainIngredients = parseIngredientAmounts(parsed.mainIngredients)
+    const seasonings = parseIngredientAmounts(parsed.seasonings)
+    const steps = Array.isArray(parsed.steps)
+      ? parsed.steps
+          .map((step, index) => {
+            if (typeof step === "string") {
+              const description = step.trim()
+              return description ? { order: index + 1, description } : null
+            }
+
+            if (!step || typeof step !== "object") {
+              return null
+            }
+
+            const record = step as Record<string, unknown>
+            const description =
+              typeof record.description === "string" ? record.description.trim() : ""
+            const order =
+              typeof record.order === "number" && Number.isFinite(record.order)
+                ? Math.max(1, Math.round(record.order))
+                : index + 1
+
+            return description ? { order, description } : null
+          })
+          .filter((step): step is ParsedStep => Boolean(step))
+      : []
+    const tips = typeof parsed.tips === "string" ? parsed.tips.trim() : undefined
+
+    if (steps.length === 0) {
+      return null
+    }
+
+    return {
+      mainIngredients,
+      seasonings,
+      steps,
+      tips,
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function OPTIONS(request: NextRequest) {
   return optionsResponse(request)
 }
@@ -64,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = validateDetailPayload(await parseJsonBody(request, "detail"))
-    const { recipeName, mainIngredients, availableIngredients } = body
+    const { recipeName, mainIngredients, seasonings, availableIngredients } = body
 
     if (!recipeName) {
       return jsonResponse(
@@ -88,46 +173,64 @@ export async function POST(request: NextRequest) {
     }
 
     const client = createServerOpenAIClient()
-    const model = process.env.TEXT_MODEL_NAME || DEFAULT_TEXT_MODEL
+    const model = process.env.DETAIL_MODEL_NAME || DEFAULT_DETAIL_MODEL
+    const fallbackModel = process.env.TEXT_MODEL_NAME || FALLBACK_TEXT_MODEL
     const ingredientList = formatIngredients(availableIngredients, mainIngredients)
+    const seasoningText = seasonings.length > 0 ? seasonings.join("、") : "按家常需要补充"
 
     const prompt =
-      "你是一个经验丰富的中国厨师。请为「" +
+      "为「" +
       recipeName +
-      "」生成详细的烹饪步骤。\n\n" +
-      "现有食材状态：\n" +
+      "」生成两人份用量和家常做法。\n" +
+      "主食材：\n" +
       ingredientList +
-      "\n\n" +
-      "要求：\n" +
-      "1. 根据现有食材，生成 4-6 个清晰明确的烹饪步骤\n" +
-      "2. 每一步要具体说明操作和火候\n" +
-      "3. 如果有缺少的食材，在步骤中提醒用户准备\n" +
-      "4. 语言简洁生动，像大厨在指导\n\n" +
-      "格式要求：\n" +
-      "- 每一步单独一行\n" +
-      "- 以数字序号开头（如 1. 热锅凉油...）\n" +
-      "- 步骤输出完成后，另起一行输出 ### 小贴士： 开头的小贴士（1-2句话，简短实用）\n\n" +
-      "示例格式：\n" +
-      "1. 热锅凉油，倒入蛋液\n" +
-      "2. 鸡蛋凝固后盛出备用\n" +
-      "3. 锅中再加少许油，放入番茄块翻炒出汁\n" +
-      "4. 加入鸡蛋，调入盐翻炒均匀\n" +
-      "### 小贴士：番茄炒至微微出汁时口感最佳，避免过度翻炒。"
+      "\n" +
+      "调料候选：\n" +
+      seasoningText +
+      "\n" +
+      "要求：两人份；用量按菜名判断，主体食材不能偏少，如胡萝卜丝用胡萝卜1-2根、番茄炒蛋用番茄2个鸡蛋2-3个；步骤4-5步，每步45字内，写清火候；只输出JSON。\n" +
+      '{"mainIngredients":[{"name":"胡萝卜","amount":"1-2根"}],"seasonings":[{"name":"盐","amount":"半小勺"}],"steps":[{"order":1,"description":"..."}],"tips":"1句小贴士"}'
 
-    const completion = await client.chat.completions.create({
-      model,
+    const completionConfig = {
       messages: [
         {
-          role: "system",
-          content: "你是一个专业的中餐厨师，擅长用简洁清晰的语言指导烹饪。",
+          role: "system" as const,
+          content: "你是家常菜厨师，只返回可解析JSON。",
         },
-        { role: "user", content: prompt },
+        { role: "user" as const, content: prompt },
       ],
-      temperature: 0.7,
+      temperature: 0.5,
       max_tokens: 800,
-    })
+    }
+
+    let completion
+    try {
+      completion = await client.chat.completions.create({
+        model,
+        ...completionConfig,
+      })
+    } catch (error) {
+      if (model === fallbackModel) {
+        throw error
+      }
+
+      completion = await client.chat.completions.create({
+        model: fallbackModel,
+        ...completionConfig,
+      })
+    }
 
     const fullText = completion.choices[0]?.message?.content || ""
+    const structuredDetail = parseStructuredDetail(fullText)
+
+    if (structuredDetail) {
+      return jsonResponse(request, {
+        success: true,
+        ...structuredDetail,
+        fullText,
+      })
+    }
+
     const tipsMatch = fullText.match(/###\s*(?:小贴士|Tips)[：:]\s*([\s\S]+)$/i)
     const tips = tipsMatch?.[1]?.trim()
     const stepsText = tips

@@ -50,6 +50,8 @@ export default function RecipeDetailScreen() {
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [availableNames, setAvailableNames] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStepsLoading, setIsStepsLoading] = useState(false);
+  const [stepsError, setStepsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
@@ -57,12 +59,16 @@ export default function RecipeDetailScreen() {
     let isMounted = true;
 
     async function loadRecipeDetail() {
+      let showedRecipeShell = false;
+
       if (!id) {
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
+      setIsStepsLoading(false);
+      setStepsError(null);
       setError(null);
 
       try {
@@ -98,12 +104,7 @@ export default function RecipeDetailScreen() {
           recommendation.seasonings,
         );
         const mainIngredientNames = classifiedIngredients.mainIngredients;
-        const response = await fetchRecipeDetail({
-          recipeName: recommendation.title,
-          mainIngredients: mainIngredientNames,
-          availableIngredients: ingredientNames,
-        });
-        const nextRecipe: RecipeDetail = {
+        const recipeShell: RecipeDetail = {
           recipeId: recommendation.recipeId,
           title: recommendation.title,
           cookingTime: recommendation.cookingTime,
@@ -116,15 +117,47 @@ export default function RecipeDetailScreen() {
             name,
             amount: estimateSeasoningAmount(name),
           })),
+          steps: [],
+          tips: '',
+        };
+
+        setRecipe(recipeShell);
+        setIsLoading(false);
+        setIsStepsLoading(true);
+        showedRecipeShell = true;
+
+        const response = await fetchRecipeDetail({
+          recipeName: recommendation.title,
+          mainIngredients: mainIngredientNames,
+          seasonings: classifiedIngredients.seasonings,
+          availableIngredients: ingredientNames,
+        });
+        const nextRecipe: RecipeDetail = {
+          ...recipeShell,
+          mainIngredients:
+            response.mainIngredients && response.mainIngredients.length > 0
+              ? response.mainIngredients
+              : recipeShell.mainIngredients,
+          seasonings:
+            response.seasonings && response.seasonings.length > 0
+              ? response.seasonings
+              : recipeShell.seasonings,
           steps: response.steps,
           tips: response.tips || '',
         };
 
         if (!isMounted) return;
         setRecipe(nextRecipe);
+        setIsStepsLoading(false);
         await saveRecipeDetailCache(nextRecipe);
       } catch (loadError) {
         if (!isMounted) return;
+        if (showedRecipeShell) {
+          setIsStepsLoading(false);
+          setStepsError('做法步骤生成失败，请重试');
+          return;
+        }
+
         const message = loadError instanceof Error ? loadError.message : '';
         setError(
           message.includes('频繁') || message.includes('429')
@@ -202,8 +235,28 @@ export default function RecipeDetailScreen() {
             seasonings={recipe.seasonings}
             availableNames={availableNames}
           />
-          <StepList steps={recipe.steps} highlightKeywords={highlightKeywords} />
-          {recipe.tips ? <TipsCard tips={recipe.tips} /> : null}
+          {isStepsLoading ? (
+            <View>
+              <Text className="border-b border-gray-100 pb-3 text-lg font-bold text-black">做法步骤</Text>
+              <View className="items-center justify-center py-8">
+                <ActivityIndicator color="#f97316" />
+                <Text className="mt-3 text-sm text-gray-400">正在生成详细做法...</Text>
+              </View>
+            </View>
+          ) : stepsError ? (
+            <View>
+              <Text className="border-b border-gray-100 pb-3 text-lg font-bold text-black">做法步骤</Text>
+              <View className="items-center justify-center py-8">
+                <Text className="text-sm text-gray-400">{stepsError}</Text>
+                <RetryButton onPress={() => setRetryKey((current) => current + 1)} />
+              </View>
+            </View>
+          ) : (
+            <>
+              <StepList steps={recipe.steps} highlightKeywords={highlightKeywords} />
+              {recipe.tips ? <TipsCard tips={recipe.tips} /> : null}
+            </>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

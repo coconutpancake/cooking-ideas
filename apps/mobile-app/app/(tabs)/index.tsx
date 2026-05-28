@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { Camera, CheckCircle2, Plus, Snowflake, Star, X } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -30,6 +30,21 @@ import {
   type IngredientItem,
 } from '@/lib/types';
 
+const VISION_EMPTY_MESSAGE = '未识别到清晰的食材，请重新拍摄或手动输入';
+
+function getVisionErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  const shouldUseEmptyMessage =
+    !message ||
+    message.includes('超时') ||
+    message.toLowerCase().includes('timeout') ||
+    message.includes('未识别') ||
+    message.includes('AI vision') ||
+    message.includes('parse');
+
+  return shouldUseEmptyMessage ? VISION_EMPTY_MESSAGE : message;
+}
+
 export default function FridgeScreen() {
   const {
     ingredients,
@@ -49,6 +64,17 @@ export default function FridgeScreen() {
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [manualIngredientName, setManualIngredientName] = useState('');
   const [isEditingIngredients, setIsEditingIngredients] = useState(false);
+  const uploadToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showUploadToast = (message: string, duration = 3000) => {
+    if (uploadToastTimerRef.current) {
+      clearTimeout(uploadToastTimerRef.current);
+    }
+
+    setUploadMessage(message);
+    setShowUploadTip(true);
+    uploadToastTimerRef.current = setTimeout(() => setShowUploadTip(false), duration);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -64,6 +90,9 @@ export default function FridgeScreen() {
 
     return () => {
       isMounted = false;
+      if (uploadToastTimerRef.current) {
+        clearTimeout(uploadToastTimerRef.current);
+      }
     };
   }, []);
 
@@ -76,20 +105,20 @@ export default function FridgeScreen() {
   const handleCameraUpdate = async () => {
     try {
       const recognizedNames = await pickAndRecognize();
-      if (recognizedNames.length === 0) return;
+      if (recognizedNames.length === 0) {
+        showUploadToast(VISION_EMPTY_MESSAGE);
+        return;
+      }
 
       const addedNames = await addRecognizedIngredients(recognizedNames);
-      setUploadMessage(
+      showUploadToast(
         addedNames.length > 0
           ? `已添加：${addedNames.join('、')}`
           : `已识别：${recognizedNames.join('、')}`,
+        2500,
       );
-      setShowUploadTip(true);
-      setTimeout(() => setShowUploadTip(false), 2500);
     } catch (error) {
-      setUploadMessage(error instanceof Error ? error.message : '未识别到清晰的食材，请重新拍摄或手动输入');
-      setShowUploadTip(true);
-      setTimeout(() => setShowUploadTip(false), 3000);
+      showUploadToast(getVisionErrorMessage(error));
     }
   };
 
@@ -326,12 +355,15 @@ export default function FridgeScreen() {
             </Text>
           </View>
 
-          {showUploadTip ? (
-            <View className="mt-4 rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5">
-              <Text className="text-sm font-medium text-orange-500">{uploadMessage}</Text>
-            </View>
-          ) : null}
         </ScrollView>
+
+        {showUploadTip ? (
+          <View
+            pointerEvents="none"
+            className="absolute left-5 right-5 top-24 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 shadow-sm">
+            <Text className="text-center text-sm font-medium text-orange-500">{uploadMessage}</Text>
+          </View>
+        ) : null}
 
         <Modal
           transparent

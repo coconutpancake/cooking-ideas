@@ -20,6 +20,7 @@ export function createServerOpenAIClient(): OpenAI {
     apiKey: getRequiredEnv("AI_API_KEY"),
     baseURL: process.env.AI_BASE_URL || DEFAULT_AI_BASE_URL,
     dangerouslyAllowBrowser: false,
+    maxRetries: 1,
   })
 }
 

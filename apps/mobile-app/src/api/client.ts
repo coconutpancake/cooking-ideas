@@ -7,6 +7,8 @@ const LOCAL_API_PORT = 3000;
 const REQUEST_TIMEOUT = 30000;
 const API_AUTH_TOKEN = process.env.EXPO_PUBLIC_API_AUTH_TOKEN?.trim();
 
+let lastSuccessfulBaseUrl: string | null = null;
+
 interface ApiErrorResponse {
   success: false;
   error?: string;
@@ -22,6 +24,8 @@ export interface RecommendResponse {
 
 export interface DetailResponse {
   success: true;
+  mainIngredients?: { name: string; amount: string }[];
+  seasonings?: { name: string; amount: string }[];
   steps: RecipeStep[];
   tips?: string;
   fullText?: string;
@@ -76,17 +80,21 @@ function getLocalApiBaseUrl() {
 function getApiBaseUrls() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   const localApiBaseUrl = getLocalApiBaseUrl();
-  const isConfiguredProduction = configuredUrl === PRODUCTION_API_BASE_URL;
   const candidates = [
-    __DEV__ && isConfiguredProduction ? localApiBaseUrl : null,
     configuredUrl || null,
-    __DEV__ && !isConfiguredProduction ? localApiBaseUrl : null,
+    __DEV__ ? localApiBaseUrl : null,
     PRODUCTION_API_BASE_URL,
   ];
 
-  return Array.from(
+  const baseUrls = Array.from(
     new Set(candidates.filter((url): url is string => Boolean(url)).map(normalizeBaseUrl)),
   );
+
+  if (lastSuccessfulBaseUrl && baseUrls.includes(lastSuccessfulBaseUrl)) {
+    return [lastSuccessfulBaseUrl, ...baseUrls.filter((url) => url !== lastSuccessfulBaseUrl)];
+  }
+
+  return baseUrls;
 }
 
 function buildUrl(baseUrl: string, path: string) {
@@ -164,6 +172,7 @@ async function requestJson<T extends object>(
         throw new Error(data.error || '请求失败');
       }
 
+      lastSuccessfulBaseUrl = baseUrl;
       return data as T;
     } catch (error) {
       lastError = error;
@@ -203,6 +212,7 @@ export async function fetchRecommendations(context: RecommendationContext, devic
 export async function fetchRecipeDetail(params: {
   recipeName: string;
   mainIngredients: string[];
+  seasonings?: string[];
   availableIngredients: string[];
 }) {
   return requestJson<DetailResponse>('/api/detail', params);

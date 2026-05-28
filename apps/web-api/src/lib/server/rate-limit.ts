@@ -8,6 +8,11 @@ import { jsonResponse } from "@/lib/server/http"
 const DEFAULT_LIMIT = 10
 const DEFAULT_WINDOW_MS = 60 * 1000
 const MAX_BUCKET_AGE_MS = 5 * DEFAULT_WINDOW_MS
+const ROUTE_LIMITS: Record<string, { limit: number; windowMs?: number }> = {
+  vision: { limit: 30 },
+  detail: { limit: 20 },
+  recommend: { limit: 12 },
+}
 
 interface RateLimitBucket {
   count: number
@@ -95,7 +100,7 @@ function checkRateLimit(
 }
 
 export function rateLimitRequest(request: NextRequest, scope: string): NextResponse | null {
-  const result = checkRateLimit(request, scope)
+  const result = checkRateLimit(request, scope, ROUTE_LIMITS[scope])
 
   if (result.allowed) {
     return null

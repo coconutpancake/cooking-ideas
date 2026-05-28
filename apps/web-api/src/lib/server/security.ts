@@ -18,6 +18,7 @@ interface JwtPayload {
 interface DetailPayload {
   recipeName: string
   mainIngredients: string[]
+  seasonings: string[]
   availableIngredients: string[]
 }
 
@@ -314,6 +315,9 @@ export function validateDetailPayload(body: unknown): DetailPayload {
     mainIngredients: normalizeStringList(data.mainIngredients, "mainIngredients", {
       minItems: 1,
     }),
+    seasonings: Array.isArray(data.seasonings)
+      ? normalizeStringList(data.seasonings, "seasonings")
+      : [],
     availableIngredients: normalizeStringList(data.availableIngredients, "availableIngredients"),
   }
 }

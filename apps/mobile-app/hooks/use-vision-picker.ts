@@ -5,8 +5,10 @@ import { Alert, Platform } from 'react-native';
 
 import { recognizeIngredients } from '@/src/api/client';
 
-const PICKER_IMAGE_QUALITY = 0.2;
-const MAX_IMAGE_WIDTH = 1024;
+const PICKER_IMAGE_QUALITY = 0.65;
+const MAX_IMAGE_LONG_EDGE = 1600;
+const MAX_DIRECT_IMAGE_BYTES = 1.6 * 1024 * 1024;
+const MAX_DIRECT_IMAGE_LONG_EDGE = 1800;
 
 function debugLog(message: string, details?: unknown) {
   if (!__DEV__) {
@@ -50,10 +52,44 @@ async function launchCamera() {
   });
 }
 
+function estimateBase64Bytes(base64: string) {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
+}
+
 async function toCompressedDataUrl(asset: ImagePicker.ImagePickerAsset) {
+  const longEdge = Math.max(asset.width || 0, asset.height || 0);
+  const directBytes = asset.base64 ? estimateBase64Bytes(asset.base64) : 0;
+  const directMimeType = asset.mimeType || 'image/jpeg';
+  const canUseDirectMimeType = /^image\/(jpeg|jpg|png|webp)$/i.test(directMimeType);
+
+  if (
+    asset.base64 &&
+    canUseDirectMimeType &&
+    directBytes > 0 &&
+    directBytes <= MAX_DIRECT_IMAGE_BYTES &&
+    longEdge <= MAX_DIRECT_IMAGE_LONG_EDGE
+  ) {
+    debugLog('>>> [VisionPicker] use picker image without recompressing', {
+      width: asset.width,
+      height: asset.height,
+      mimeType: asset.mimeType,
+      approxPayloadKB: Math.round(directBytes / 1024),
+    });
+
+    return `data:${directMimeType};base64,${asset.base64}`;
+  }
+
   const resizeAction =
-    asset.width && asset.width > MAX_IMAGE_WIDTH
-      ? [{ resize: { width: MAX_IMAGE_WIDTH } }]
+    longEdge > MAX_IMAGE_LONG_EDGE
+      ? [
+          {
+            resize:
+              (asset.width || 0) >= (asset.height || 0)
+                ? { width: MAX_IMAGE_LONG_EDGE }
+                : { height: MAX_IMAGE_LONG_EDGE },
+          },
+        ]
       : [];
 
   debugLog('>>> [VisionPicker] selected image', {
