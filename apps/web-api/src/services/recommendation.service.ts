@@ -14,6 +14,8 @@ import {
 } from "./recommendation-normalization"
 import type { Recommendation } from "./recommendation-types"
 
+const MIN_MATCHING_SCORE = 0.4
+
 function formatList(items: string[], fallback = "无"): string {
   return items.length > 0 ? items.join("、") : fallback
 }
@@ -44,22 +46,37 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
     "菜名要短且真实，优先 4-8 个汉字，最多10个。菜名出现的所有主食材必须在 m 中。m 只放菜品主体食材；油盐糖醋、生抽老抽、料酒蚝油、淀粉、胡椒粉、辣椒粉、酱料、葱姜蒜、水/高汤等放 s。番茄酱不是番茄。\n" +
     '只输出紧凑 JSON 数组：[{"t":"菜名","e":"🍅🍳","m":["主食材"],"s":["调料"],"c":"炒","d":15,"strategy":"A"}]。不要解释。'
 
-  const response = await client.chat.completions.create({
-    model,
-    messages: [
+  const buildMessages = (userPrompt: string) =>
+    [
       {
-        role: "system",
+        role: "system" as const,
         content:
           "你是一个专业中餐厨师。你必须严格返回指定数量的菜谱，主食材不能重复超过2次。输出必须是完整有效的JSON数组。",
       },
-      { role: "user", content: prompt },
-    ],
-    temperature: 0.8,
-    max_tokens: maxTokens,
-  })
+      { role: "user" as const, content: userPrompt },
+    ]
 
-  const aiResponse = response.choices?.[0]?.message?.content || ""
-  const parsedRecipes = parseRecommendationResponse(aiResponse, pageSize)
+  const requestRecipes = async (userPrompt: string, temperature: number) => {
+    const response = await client.chat.completions.create({
+      model,
+      messages: buildMessages(userPrompt),
+      temperature,
+      max_tokens: maxTokens,
+    })
+
+    return response.choices?.[0]?.message?.content || ""
+  }
+
+  let aiResponse = await requestRecipes(prompt, 0.8)
+  let parsedRecipes = parseRecommendationResponse(aiResponse, pageSize)
+
+  if (parsedRecipes.length === 0) {
+    const retryPrompt =
+      prompt +
+      "\n\n上一次输出无法解析。这一次只返回严格 JSON 数组，不要 Markdown，不要解释，不要多余文字。"
+    aiResponse = await requestRecipes(retryPrompt, 0.3)
+    parsedRecipes = parseRecommendationResponse(aiResponse, pageSize)
+  }
 
   if (parsedRecipes.length === 0) {
     throw new Error("Failed to parse AI recommendation response")
@@ -70,14 +87,15 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
     .filter((recipe) => !excludedTitleSet.has(recipe.title.toLowerCase()))
     .map((recipe) => normalizeMainIngredientsForContext(recipe, ingredients))
     .map((recipe) => calculateMatch(recipe, ingredients, pinnedIngredients))
-  const filteredResults = matchResults.filter((result) => result.matchingScore >= 0.4)
+  const filteredResults = matchResults.filter((result) => result.matchingScore >= MIN_MATCHING_SCORE)
+  const candidateResults = filteredResults.length > 0 ? filteredResults : matchResults
 
-  if (filteredResults.length === 0) {
+  if (candidateResults.length === 0) {
     throw new ApiRequestError("没有找到匹配的菜谱，请尝试添加其他食材", 404)
   }
 
   const recommendationIdPrefix = Date.now()
-  const sortedResults = sortPersonalizedRecommendations(filteredResults)
+  const sortedResults = sortPersonalizedRecommendations(candidateResults)
   const recommendations: Recommendation[] = sortedResults
     .slice(0, pageSize)
     .map((result, index) => ({
@@ -96,6 +114,6 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
 
   return {
     recommendations,
-    totalCandidates: filteredResults.length,
+    totalCandidates: candidateResults.length,
   }
 }
