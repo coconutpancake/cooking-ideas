@@ -126,30 +126,57 @@ export default function RecipeDetailScreen() {
         setIsStepsLoading(true);
         showedRecipeShell = true;
 
-        const response = await fetchRecipeDetail({
+        const detailParams = {
           recipeName: recommendation.title,
           mainIngredients: mainIngredientNames,
           seasonings: classifiedIngredients.seasonings,
           availableIngredients: ingredientNames,
+        };
+
+        const ingredientsPromise = fetchRecipeDetail({
+          ...detailParams,
+          detailStage: 'ingredients',
         });
-        const nextRecipe: RecipeDetail = {
-          ...recipeShell,
-          mainIngredients:
-            response.mainIngredients && response.mainIngredients.length > 0
-              ? response.mainIngredients
-              : recipeShell.mainIngredients,
-          seasonings:
-            response.seasonings && response.seasonings.length > 0
-              ? response.seasonings
-              : recipeShell.seasonings,
-          steps: response.steps,
-          tips: response.tips || '',
+        const stepsPromise = fetchRecipeDetail({
+          ...detailParams,
+          detailStage: 'steps',
+        });
+
+        let nextRecipe = recipeShell;
+
+        try {
+          const ingredientResponse = await ingredientsPromise;
+          nextRecipe = {
+            ...nextRecipe,
+            mainIngredients:
+              ingredientResponse.mainIngredients && ingredientResponse.mainIngredients.length > 0
+                ? ingredientResponse.mainIngredients
+                : nextRecipe.mainIngredients,
+            seasonings:
+              ingredientResponse.seasonings && ingredientResponse.seasonings.length > 0
+                ? ingredientResponse.seasonings
+                : nextRecipe.seasonings,
+          };
+
+          if (!isMounted) return;
+          setRecipe(nextRecipe);
+        } catch {}
+
+        const stepsResponse = await stepsPromise;
+        if (!stepsResponse.steps || stepsResponse.steps.length === 0) {
+          throw new Error('做法步骤生成失败');
+        }
+
+        const completedRecipe: RecipeDetail = {
+          ...nextRecipe,
+          steps: stepsResponse.steps,
+          tips: stepsResponse.tips || '',
         };
 
         if (!isMounted) return;
-        setRecipe(nextRecipe);
+        setRecipe(completedRecipe);
         setIsStepsLoading(false);
-        await saveRecipeDetailCache(nextRecipe);
+        await saveRecipeDetailCache(completedRecipe);
       } catch (loadError) {
         if (!isMounted) return;
         if (showedRecipeShell) {

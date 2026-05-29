@@ -7,11 +7,16 @@ import { ApiRequestError, type RecommendationPayload } from "@/lib/server/securi
 
 import { DEFAULT_TEXT_MODEL } from "./ai.constants"
 import { parseRecommendationResponse } from "./recommendation-parser"
-import { buildTasteInstruction, formatMealPreference } from "./recommendation-prompts"
+import {
+  buildMealPreferenceInstruction,
+  buildTasteInstruction,
+  formatMealPreference,
+} from "./recommendation-prompts"
 import {
   DEFAULT_EMOJI,
   calculateMatch,
   normalizeMainIngredientsForContext,
+  removeSimilarRecommendations,
   sortPersonalizedRecommendations,
 } from "./recommendation-normalization"
 import type { Recommendation } from "./recommendation-types"
@@ -40,19 +45,23 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
   const ingredientList = formatList(ingredients)
   const pinnedList = formatList(pinnedIngredients)
   const mealPreferenceText = formatMealPreference(mealPreference)
+  const mealPreferenceInstruction = buildMealPreferenceInstruction(mealPreference)
   const tasteInstruction = buildTasteInstruction(userPreferences, pageSize)
   const preferenceText = userPreferences
     ? `目标=${userPreferences.goal || "无"}；口味=${formatList(userPreferences.tastes)}；忌口=${formatList(userPreferences.avoidances)}`
     : "无长期偏好"
   const excludedText = formatList(excludeRecipeTitles)
-  const maxTokens = Math.min(2200, Math.max(900, pageSize * 170 + 450))
+  const candidateCount = Math.min(18, Math.max(pageSize + 4, Math.ceil(pageSize * 1.4)))
+  const maxTokens = Math.min(2800, Math.max(900, candidateCount * 170 + 450))
 
   const prompt =
-    `根据食材「${ingredientList}」生成恰好${pageSize}道真实家常菜推荐。\n` +
+    `根据食材「${ingredientList}」生成${candidateCount}道真实家常菜候选，接口会筛选后展示${pageSize}道。\n` +
     `标星=${pinnedList}；本餐偏好=${mealPreferenceText}；长期偏好=${preferenceText}；已展示禁用=${excludedText}。\n` +
+    `本餐偏好要求：${mealPreferenceInstruction}\n` +
     `口味要求：${tasteInstruction}\n` +
     "策略：A=标星+本餐+长期约40%，B=标星+本餐约30%，C=现有食材发散约30%。有标星时 A/B 必含至少一个标星食材。\n" +
     "规则：同一非标星主食材最多出现2次；覆盖炒/煮/蒸/烤/凉拌等不同做法；避开忌口和已展示菜名；通用肉类不要当具体部位，如猪肉不等于排骨/猪蹄。\n" +
+    "不要把所有食材强行两两拼成组合菜；适合单独成菜的核心食材也应保留经典家常单品菜。不要只调整食材顺序或把烧/炖/焖等近似做法互换来生成雷同菜。\n" +
     "菜名要短且真实，优先 4-8 个汉字，最多10个。菜名出现的所有主食材必须在 m 中。m 只放菜品主体食材；油盐糖醋、生抽老抽、料酒蚝油、淀粉、胡椒粉、辣椒粉、酱料、葱姜蒜、水/高汤等放 s。番茄酱不是番茄。\n" +
     '只输出紧凑 JSON 对象：{"recipes":[{"t":"菜名","e":"🍅🍳","m":["主食材"],"s":["调料"],"c":"炒","d":15,"strategy":"A"}]}。不要解释。'
 
@@ -81,14 +90,14 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
   }
 
   let aiResponse = await requestRecipes(prompt, 0.8)
-  let parsedRecipes = parseRecommendationResponse(aiResponse, pageSize)
+  let parsedRecipes = parseRecommendationResponse(aiResponse, candidateCount)
 
   if (parsedRecipes.length === 0) {
     const retryPrompt =
       prompt +
       '\n\n上一次输出无法解析。这一次只返回严格 JSON 对象，格式必须是 {"recipes":[...]}，不要 Markdown，不要解释，不要多余文字。'
     aiResponse = await requestRecipes(retryPrompt, 0.3)
-    parsedRecipes = parseRecommendationResponse(aiResponse, pageSize)
+    parsedRecipes = parseRecommendationResponse(aiResponse, candidateCount)
   }
 
   if (parsedRecipes.length === 0) {
@@ -108,8 +117,12 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
   }
 
   const recommendationIdPrefix = Date.now()
-  const sortedResults = sortPersonalizedRecommendations(candidateResults)
-  const recommendations: Recommendation[] = sortedResults
+  const sortedResults = sortPersonalizedRecommendations(candidateResults, {
+    mealPreference,
+    userPreferences,
+  })
+  const uniqueResults = removeSimilarRecommendations(sortedResults, excludeRecipeTitles)
+  const recommendations: Recommendation[] = uniqueResults
     .slice(0, pageSize)
     .map((result, index) => ({
       recipeId: `ai-${recommendationIdPrefix}-${index}`,
@@ -127,6 +140,6 @@ export async function generateRecipeRecommendations(context: RecommendationPaylo
 
   return {
     recommendations,
-    totalCandidates: candidateResults.length,
+    totalCandidates: uniqueResults.length,
   }
 }

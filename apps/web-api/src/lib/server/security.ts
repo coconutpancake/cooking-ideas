@@ -20,6 +20,7 @@ interface DetailPayload {
   mainIngredients: string[]
   seasonings: string[]
   availableIngredients: string[]
+  detailStage?: "full" | "ingredients" | "steps"
 }
 
 export interface RecommendationPayload {
@@ -319,6 +320,10 @@ export function validateDetailPayload(body: unknown): DetailPayload {
       ? normalizeStringList(data.seasonings, "seasonings")
       : [],
     availableIngredients: normalizeStringList(data.availableIngredients, "availableIngredients"),
+    detailStage:
+      data.detailStage === "ingredients" || data.detailStage === "steps" || data.detailStage === "full"
+        ? data.detailStage
+        : "full",
   }
 }
 

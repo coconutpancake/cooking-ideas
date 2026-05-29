@@ -129,12 +129,15 @@ const TITLE_INGREDIENT_KEYWORDS = [
   "西兰花",
   "花菜",
   "白菜",
+  "卷心菜",
   "包菜",
+  "圆白菜",
   "菠菜",
   "生菜",
   "芹菜",
   "韭菜",
   "蘑菇",
+  "杏鲍菇",
   "木耳",
   "香菇",
   "金针菇",
@@ -187,8 +190,35 @@ const KNOWN_DISH_REQUIRED_INGREDIENTS: Record<string, string[]> = {
   西红柿炒蛋: ["西红柿", "鸡蛋"],
 }
 
+const METHOD_FAMILIES: Array<{ family: string; keywords: string[] }> = [
+  { family: "braise", keywords: ["红烧", "烧", "炖", "焖", "煨", "煲", "卤"] },
+  { family: "stir-fry", keywords: ["小炒", "快炒", "炒", "爆", "煸"] },
+  { family: "soup", keywords: ["汤", "煮", "汆"] },
+  { family: "steam", keywords: ["清蒸", "蒸"] },
+  { family: "roast", keywords: ["烤", "焗"] },
+  { family: "cold", keywords: ["凉拌", "拌"] },
+  { family: "pan-fry", keywords: ["香煎", "煎"] },
+  { family: "deep-fry", keywords: ["炸"] },
+]
+
 function normalizeIngredientName(name: string): string {
   return name.toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, "").trim()
+}
+
+function canonicalizeIngredientName(name: string): string {
+  const normalized = normalizeIngredientName(name)
+
+  for (const [canonicalName, aliases] of Object.entries(INGREDIENT_ALIASES)) {
+    const canonical = normalizeIngredientName(canonicalName)
+    if (
+      normalized === canonical ||
+      aliases.some((alias) => normalizeIngredientName(alias) === normalized)
+    ) {
+      return canonical
+    }
+  }
+
+  return normalized
 }
 
 function titleContainsIngredientKeyword(title: string, keyword: string): boolean {
@@ -332,10 +362,140 @@ function getStrategyRank(strategy?: "A" | "B" | "C"): number {
   return 2
 }
 
-export function sortPersonalizedRecommendations(results: MatchResult[]): MatchResult[] {
+interface SortOptions {
+  mealPreference?: string | null
+  userPreferences?: {
+    tastes: string[]
+  } | null
+}
+
+function getConstraintScore(result: MatchResult, options: SortOptions): number {
+  let score = 0
+  const hasMealPreference = Boolean(options.mealPreference?.trim())
+  const hasLongTermTastePreference = Boolean(options.userPreferences?.tastes?.length)
+
+  if (result.includesPinnedIngredient) {
+    score += 4
+  }
+
+  if (hasMealPreference && (result.recipe.strategy === "A" || result.recipe.strategy === "B")) {
+    score += 2
+  }
+
+  if (hasLongTermTastePreference && result.recipe.strategy === "A") {
+    score += 1
+  }
+
+  if (result.recipe.strategy === "A") {
+    score += 0.5
+  } else if (result.recipe.strategy === "B") {
+    score += 0.25
+  }
+
+  return score
+}
+
+function getCookingMethodFamily(method?: string, title?: string): string {
+  const text = `${method || ""} ${title || ""}`
+
+  for (const { family, keywords } of METHOD_FAMILIES) {
+    if (keywords.some((keyword) => text.includes(keyword))) {
+      return family
+    }
+  }
+
+  return normalizeIngredientName(method || DEFAULT_COOKING_METHOD) || "other"
+}
+
+function extractTitleIngredientKeys(title: string): string[] {
+  const keys = new Set<string>()
+  const keywords = [...TITLE_INGREDIENT_KEYWORDS].sort((a, b) => b.length - a.length)
+
+  for (const keyword of keywords) {
+    if (titleContainsIngredientKeyword(title, keyword)) {
+      keys.add(canonicalizeIngredientName(keyword))
+    }
+  }
+
+  return [...keys]
+}
+
+function getRecipeSimilarityKey(recipe: AIGeneratedRecipe): string | null {
+  const ingredientKeys = new Set<string>()
+
+  for (const ingredient of recipe.mainIngredients) {
+    const key = canonicalizeIngredientName(ingredient)
+    if (key) {
+      ingredientKeys.add(key)
+    }
+  }
+
+  for (const key of extractTitleIngredientKeys(recipe.title)) {
+    ingredientKeys.add(key)
+  }
+
+  if (ingredientKeys.size === 0) {
+    return null
+  }
+
+  const family = getCookingMethodFamily(recipe.cookingMethod, recipe.title)
+
+  return `${family}:${[...ingredientKeys].sort().join("+")}`
+}
+
+function getTitleSimilarityKey(title: string): string | null {
+  const ingredientKeys = extractTitleIngredientKeys(title)
+
+  if (ingredientKeys.length === 0) {
+    return null
+  }
+
+  return `${getCookingMethodFamily(undefined, title)}:${ingredientKeys.sort().join("+")}`
+}
+
+export function removeSimilarRecommendations(
+  results: MatchResult[],
+  excludedTitles: string[] = []
+): MatchResult[] {
+  const seenTitles = new Set(excludedTitles.map((title) => title.toLowerCase().trim()))
+  const seenSimilarityKeys = new Set(
+    excludedTitles
+      .map(getTitleSimilarityKey)
+      .filter((key): key is string => Boolean(key))
+  )
+  const uniqueResults: MatchResult[] = []
+
+  for (const result of results) {
+    const titleKey = result.recipe.title.toLowerCase().trim()
+    const similarityKey = getRecipeSimilarityKey(result.recipe)
+
+    if (seenTitles.has(titleKey) || (similarityKey && seenSimilarityKeys.has(similarityKey))) {
+      continue
+    }
+
+    uniqueResults.push(result)
+    seenTitles.add(titleKey)
+
+    if (similarityKey) {
+      seenSimilarityKeys.add(similarityKey)
+    }
+  }
+
+  return uniqueResults
+}
+
+export function sortPersonalizedRecommendations(
+  results: MatchResult[],
+  options: SortOptions = {}
+): MatchResult[] {
   return results.sort((a, b) => {
     if (Math.abs(a.matchingScore - b.matchingScore) > 0.01) {
       return b.matchingScore - a.matchingScore
+    }
+
+    const constraintDelta = getConstraintScore(b, options) - getConstraintScore(a, options)
+    if (Math.abs(constraintDelta) > 0.01) {
+      return constraintDelta
     }
 
     if (a.includesPinnedIngredient !== b.includesPinnedIngredient) {

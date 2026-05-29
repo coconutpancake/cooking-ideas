@@ -30,6 +30,7 @@ loadDotEnv(".env.local")
 const baseUrl = (process.env.SMOKE_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "")
 const authToken = process.env.SMOKE_API_TOKEN || process.env.API_CLIENT_TOKEN
 const visionImagePath = process.env.VISION_TEST_IMAGE
+const visionExpectedIngredient = process.env.VISION_EXPECTED_INGREDIENT
 const requestTimeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 45000)
 
 function withTimeout() {
@@ -177,6 +178,12 @@ async function testVision() {
   const ingredients = data.data?.ingredients || []
 
   assert(ingredients.length > 0, "vision returned no ingredients")
+  if (visionExpectedIngredient) {
+    assert(
+      ingredients.some((item) => item.name?.includes(visionExpectedIngredient)),
+      `vision did not include expected ingredient: ${visionExpectedIngredient}`
+    )
+  }
   printResult("vision image recognition", elapsedMs, ingredients.map((item) => item.name).join(","))
 }
 

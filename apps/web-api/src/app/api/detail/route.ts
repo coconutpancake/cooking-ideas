@@ -29,6 +29,17 @@ interface StructuredRecipeDetail {
 }
 
 const DEFAULT_DETAIL_MODEL = DEFAULT_TEXT_MODEL
+function normalizeRecipeText(value: string): string {
+  return value.replace(/\s/g, "").toLowerCase()
+}
+
+function usuallyNeedsCookingOil(recipeName: string): boolean {
+  return /炒|煎|炸|爆|煸|烧|干锅|香辣|肉丝|肉片|鸡丁/.test(recipeName)
+}
+
+function includesCookingOil(seasonings: IngredientAmount[]): boolean {
+  return seasonings.some((item) => /油|食用油/.test(item.name))
+}
 
 function formatIngredients(availableIngredients: string[], allIngredients: string[]): string {
   const availableSet = new Set(availableIngredients.map((item) => item.toLowerCase()))
@@ -38,31 +49,6 @@ function formatIngredients(availableIngredients: string[], allIngredients: strin
       `${ingredient}${availableSet.has(ingredient.toLowerCase()) ? " [已有]" : " [缺少]"}`
     )
     .join("、")
-}
-
-function parseSteps(text: string): ParsedStep[] {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-  const steps: ParsedStep[] = []
-
-  for (const line of lines) {
-    const cleaned = line
-      .replace(/^[1-9]\d*[.\u3001)\s-]*/, "")
-      .replace(/^step\s*\d+[:.)\s-]*/i, "")
-      .trim()
-
-    if (cleaned.length > 5) {
-      steps.push({
-        order: steps.length + 1,
-        description: cleaned,
-      })
-    }
-  }
-
-  if (steps.length === 0 && text.trim()) {
-    return [{ order: 1, description: text.trim() }]
-  }
-
-  return steps
 }
 
 function parseIngredientAmounts(value: unknown): IngredientAmount[] {
@@ -78,14 +64,17 @@ function parseIngredientAmounts(value: unknown): IngredientAmount[] {
 
       const record = item as Record<string, unknown>
       const name = typeof record.name === "string" ? record.name.trim() : ""
-      const amount = typeof record.amount === "string" ? record.amount.trim() : ""
+      const rawAmount = record.amount ?? record.quantity ?? record.qty
+      const amount = typeof rawAmount === "string" ? rawAmount.trim() : ""
 
       return name && amount ? { name, amount } : null
     })
     .filter((item): item is IngredientAmount => Boolean(item))
 }
 
-function parseStructuredDetail(content: string): StructuredRecipeDetail | null {
+function parseStructuredIngredients(
+  content: string
+): Pick<StructuredRecipeDetail, "mainIngredients" | "seasonings"> | null {
   const jsonMatch = content.match(/\{[\s\S]*\}/)
 
   if (!jsonMatch) {
@@ -96,6 +85,29 @@ function parseStructuredDetail(content: string): StructuredRecipeDetail | null {
     const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
     const mainIngredients = parseIngredientAmounts(parsed.mainIngredients)
     const seasonings = parseIngredientAmounts(parsed.seasonings)
+
+    if (mainIngredients.length === 0 || seasonings.length === 0) {
+      return null
+    }
+
+    return {
+      mainIngredients,
+      seasonings,
+    }
+  } catch {
+    return null
+  }
+}
+
+function parseStructuredSteps(content: string): Pick<StructuredRecipeDetail, "steps" | "tips"> | null {
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+
+  if (!jsonMatch) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
     const steps = Array.isArray(parsed.steps)
       ? parsed.steps
           .map((step, index) => {
@@ -120,21 +132,71 @@ function parseStructuredDetail(content: string): StructuredRecipeDetail | null {
           })
           .filter((step): step is ParsedStep => Boolean(step))
       : []
-    const tips = typeof parsed.tips === "string" ? parsed.tips.trim() : undefined
+    const tips =
+      typeof parsed.tips === "string"
+        ? parsed.tips.trim()
+        : Array.isArray(parsed.tips)
+          ? parsed.tips.filter((item): item is string => typeof item === "string").join("；")
+          : undefined
 
     if (steps.length === 0) {
       return null
     }
 
     return {
-      mainIngredients,
-      seasonings,
       steps,
       tips,
     }
   } catch {
     return null
   }
+}
+
+function parseStructuredDetail(content: string): StructuredRecipeDetail | null {
+  const ingredients = parseStructuredIngredients(content)
+  const steps = parseStructuredSteps(content)
+
+  if (!ingredients || !steps) {
+    return null
+  }
+
+  return {
+    ...ingredients,
+    ...steps,
+  }
+}
+
+function isStructuredDetailRelevant(
+  detail: StructuredRecipeDetail,
+  mainIngredients: string[],
+  recipeName: string
+): boolean {
+  if (detail.mainIngredients.length === 0 || detail.steps.length === 0) {
+    return false
+  }
+
+  if (usuallyNeedsCookingOil(recipeName) && !includesCookingOil(detail.seasonings)) {
+    return false
+  }
+
+  const expectedNames = mainIngredients.map(normalizeRecipeText).filter(Boolean)
+  if (expectedNames.length === 0) {
+    return true
+  }
+
+  const returnedNames = detail.mainIngredients.map((item) => normalizeRecipeText(item.name))
+  const returnedText = normalizeRecipeText(
+    [
+      ...detail.mainIngredients.map((item) => item.name),
+      ...detail.steps.map((step) => step.description),
+    ].join(" ")
+  )
+
+  return expectedNames.every(
+    (name) =>
+      returnedNames.some((returnedName) => returnedName.includes(name) || name.includes(returnedName)) ||
+      returnedText.includes(name)
+  )
 }
 
 export async function OPTIONS(request: NextRequest) {
@@ -149,7 +211,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = validateDetailPayload(await parseJsonBody(request, "detail"))
-    const { recipeName, mainIngredients, seasonings, availableIngredients } = body
+    const { recipeName, mainIngredients, seasonings, availableIngredients, detailStage } = body
 
     if (!recipeName) {
       return jsonResponse(
@@ -177,75 +239,179 @@ export async function POST(request: NextRequest) {
     const fallbackModel = process.env.TEXT_MODEL_NAME || DEFAULT_TEXT_MODEL
     const ingredientList = formatIngredients(availableIngredients, mainIngredients)
     const seasoningText = seasonings.length > 0 ? seasonings.join("、") : "按家常需要补充"
-
-    const prompt =
-      "为「" +
-      recipeName +
-      "」生成两人份用量和家常做法。\n" +
-      "主食材：\n" +
-      ingredientList +
-      "\n" +
-      "调料候选：\n" +
-      seasoningText +
-      "\n" +
-      "要求：两人份；用量按菜名判断，主体食材不能偏少，如胡萝卜丝用胡萝卜1-2根、番茄炒蛋用番茄2个鸡蛋2-3个；步骤4-5步，每步45字内，写清火候；只输出JSON。\n" +
-      '{"mainIngredients":[{"name":"胡萝卜","amount":"1-2根"}],"seasonings":[{"name":"盐","amount":"半小勺"}],"steps":[{"order":1,"description":"..."}],"tips":"1句小贴士"}'
-
-    const completionConfig = {
-      messages: [
-        {
-          role: "system" as const,
-          content: "你是家常菜厨师，只返回可解析JSON。",
-        },
-        { role: "user" as const, content: prompt },
-      ],
-      temperature: 0.5,
-      max_tokens: 800,
-      response_format: { type: "json_object" as const },
-      extra_body: { thinking: { type: "disabled" } },
-    }
-
-    let completion
-    try {
-      completion = await client.chat.completions.create({
-        model,
-        ...completionConfig,
-      })
-    } catch (error) {
-      if (model === fallbackModel) {
-        throw error
+    const requestCompletion = async (nextPrompt: string, nextStage: "full" | "ingredients" | "steps") => {
+      const completionConfig = {
+        messages: [
+          {
+            role: "system" as const,
+            content:
+              nextStage === "ingredients"
+                ? "你是家常菜厨师，只生成食材和调料用量的 JSON。调料和辅料优先使用家庭厨房计量单位，普通用油写适量。"
+                : nextStage === "steps"
+                  ? "你是家常菜厨师，只生成做法步骤和小贴士的 JSON。"
+                  : "你是家常菜厨师，必须严格按照菜名动态生成菜谱，只返回可解析 JSON。",
+          },
+          { role: "user" as const, content: nextPrompt },
+        ],
+        temperature: 0.2,
+        max_tokens: nextStage === "full" ? 720 : 420,
+        response_format: { type: "json_object" as const },
+        extra_body: { thinking: { type: "disabled" } },
       }
 
-      completion = await client.chat.completions.create({
-        model: fallbackModel,
-        ...completionConfig,
-      })
+      try {
+        return await client.chat.completions.create({
+          model,
+          ...completionConfig,
+        })
+      } catch (error) {
+        if (model === fallbackModel) {
+          throw error
+        }
+
+        return client.chat.completions.create({
+          model: fallbackModel,
+          ...completionConfig,
+        })
+      }
     }
 
-    const fullText = completion.choices[0]?.message?.content || ""
-    const structuredDetail = parseStructuredDetail(fullText)
+    const retryOnce = async <T>(
+      nextStage: "full" | "ingredients" | "steps",
+      initialPrompt: string,
+      parseResult: (text: string) => T | null,
+      retrySuffix: string,
+    ): Promise<{ text: string; result: T } | null> => {
+      const firstCompletion = await requestCompletion(initialPrompt, nextStage)
+      const firstText = firstCompletion.choices[0]?.message?.content || ""
+      const firstParsed = parseResult(firstText)
+      if (firstParsed) {
+        return { text: firstText, result: firstParsed }
+      }
 
-    if (structuredDetail) {
+      const secondCompletion = await requestCompletion(initialPrompt + retrySuffix, nextStage)
+      const secondText = secondCompletion.choices[0]?.message?.content || ""
+      const secondParsed = parseResult(secondText)
+      if (secondParsed) {
+        return { text: secondText, result: secondParsed }
+      }
+
+      return null
+    }
+
+    if (detailStage === "ingredients") {
+      const ingredientPrompt =
+        `菜名=${recipeName}；份量=2人份。\n` +
+        `主食材=${ingredientList}；调料候选=${seasoningText}。\n` +
+        "只返回 JSON 对象，且只能包含 mainIngredients、seasonings 两个键。\n" +
+        "mainIngredients/seasonings 必须是 {name,amount} 数组。主食材和调料的种类、用量都要按菜名动态生成，不能套模板；主食材用量要真实；调料和辅料优先用家庭单位，如一汤匙、半汤匙、一茶匙、半茶匙、少许、适量、一小把、2瓣、3片，除非特别必要，不要把调料写成克数；如果这道菜通常需要炒、煎、爆香或热锅放油，seasonings 必须包含食用油，普通家常菜油量写“适量”，只有油炸、半煎炸等特殊用油菜才写具体油量。"
+
+      const parsed = await retryOnce(
+        "ingredients",
+        ingredientPrompt,
+        (text) => {
+          const ingredients = parseStructuredIngredients(text)
+          if (!ingredients) {
+            return null
+          }
+
+          const hasRequiredOil =
+            !usuallyNeedsCookingOil(recipeName) || includesCookingOil(ingredients.seasonings)
+
+          return ingredients.mainIngredients.length > 0 &&
+            ingredients.seasonings.length > 0 &&
+            hasRequiredOil
+            ? ingredients
+            : null
+        },
+        "\n上一次输出不符合要求，请重新生成。必须只输出 JSON，只包含 mainIngredients 和 seasonings 两个键，且两者都不能为空；如果菜名通常需要用油，seasonings 必须包含食用油，普通油量写“适量”。",
+      )
+
+      if (!parsed) {
+        return jsonResponse(
+          request,
+          { success: false, error: "食材和调料生成失败，请稍后重试" },
+          { status: 502 }
+        )
+      }
+
       return jsonResponse(request, {
         success: true,
-        ...structuredDetail,
-        fullText,
+        ...parsed.result,
+        fullText: parsed.text,
       })
     }
 
-    const tipsMatch = fullText.match(/###\s*(?:小贴士|Tips)[：:]\s*([\s\S]+)$/i)
-    const tips = tipsMatch?.[1]?.trim()
-    const stepsText = tips
-      ? fullText.replace(/###\s*(?:小贴士|Tips)[：:][\s\S]+$/i, "").trim()
-      : fullText
-    const steps = parseSteps(stepsText)
+    if (detailStage === "steps") {
+      const stepsPrompt =
+        `菜名=${recipeName}；份量=2人份。\n` +
+        `主食材=${ingredientList}；调料候选=${seasoningText}。\n` +
+        "只返回 JSON 对象，且只能包含 steps、tips 两个键。\n" +
+        "steps 必须是 {order,description} 数组。steps 数组长度由菜品复杂度自己决定，少则 3-4 步，多则 5-7 步，不要固定步数；每一步尽量简洁具体，只在必要时加括号提示；tips 一句话。"
 
-    return jsonResponse(request, {
-      success: true,
-      steps,
-      tips,
-      fullText,
-    })
+      const parsed = await retryOnce(
+        "steps",
+        stepsPrompt,
+        (text) => {
+          const steps = parseStructuredSteps(text)
+          if (!steps) {
+            return null
+          }
+
+          return steps.steps.length > 0 ? steps : null
+        },
+        "\n上一次输出不符合要求，请重新生成。必须只输出 JSON，只包含 steps 和 tips 两个键，steps 不能为空，长度按菜品复杂度决定。",
+      )
+
+      if (!parsed) {
+        return jsonResponse(
+          request,
+          { success: false, error: "做法步骤生成失败，请稍后重试" },
+          { status: 502 }
+        )
+      }
+
+      return jsonResponse(request, {
+        success: true,
+        ...parsed.result,
+        fullText: parsed.text,
+      })
+    }
+
+    const fullPrompt =
+      `菜名=${recipeName}；份量=2人份。\n` +
+      `主食材=${ingredientList}；调料候选=${seasoningText}。\n` +
+      "只返回 JSON 对象，且只能包含 mainIngredients、seasonings、steps、tips 四个键。\n" +
+      "mainIngredients/seasonings 必须是 {name,amount} 数组，steps 必须是 {order,description} 数组。\n" +
+      "硬性要求：完全按菜名动态生成，不能套模板或换菜；主食材用量要按真实两人份估计，不能偏少；调料种类和用量也要结合菜名动态判断，调料和辅料优先用家庭单位，如一汤匙、半汤匙、一茶匙、半茶匙、少许、适量、一小把、2瓣、3片，除非特别必要，不要把调料写成克数；如果步骤需要炒、煎、爆香或热锅放油，seasonings 必须包含食用油，普通家常菜油量写“适量”，只有油炸、半煎炸等特殊用油菜才写具体油量；steps 数组长度由菜品复杂度自己决定，少则 3-4 步，多则 5-7 步，不要固定步数；每一步尽量简洁具体，只在必要时加括号提示；tips 一句话。"
+
+    const parsed = await retryOnce(
+      "full",
+      fullPrompt,
+      (text) => {
+        const structuredDetail = parseStructuredDetail(text)
+        if (!structuredDetail || !isStructuredDetailRelevant(structuredDetail, mainIngredients, recipeName)) {
+          return null
+        }
+
+        return structuredDetail
+      },
+      "\n上一次输出不符合要求，请重新生成。必须只输出 JSON，mainIngredients、seasonings、steps、tips 都不能为空，steps 长度由菜品复杂度决定，不要固定步数，不要写模板，不要换菜。",
+    )
+
+    if (parsed) {
+      return jsonResponse(request, {
+        success: true,
+        ...parsed.result,
+        fullText: parsed.text,
+      })
+    }
+
+    return jsonResponse(
+      request,
+      { success: false, error: "菜谱生成失败，请稍后重试" },
+      { status: 502 }
+    )
   } catch (error) {
     return handleApiError(request, error)
   }

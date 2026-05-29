@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 const PRODUCTION_API_BASE_URL = 'https://cooking-ideas.vercel.app';
 const LOCAL_API_PORT = 3000;
 const REQUEST_TIMEOUT = 30000;
+const VISION_REQUEST_TIMEOUT = 15000;
 const API_AUTH_TOKEN = process.env.EXPO_PUBLIC_API_AUTH_TOKEN?.trim();
 
 let lastSuccessfulBaseUrl: string | null = null;
@@ -26,7 +27,7 @@ export interface DetailResponse {
   success: true;
   mainIngredients?: { name: string; amount: string }[];
   seasonings?: { name: string; amount: string }[];
-  steps: RecipeStep[];
+  steps?: RecipeStep[];
   tips?: string;
   fullText?: string;
 }
@@ -124,15 +125,16 @@ function buildHeaders(deviceId?: string | null) {
 async function requestJson<T extends object>(
   path: string,
   body: unknown,
-  options: { deviceId?: string | null } = {},
+  options: { deviceId?: string | null; timeoutMs?: number } = {},
 ): Promise<T> {
   const payload = JSON.stringify(body);
   const baseUrls = getApiBaseUrls();
+  const requestTimeout = options.timeoutMs ?? REQUEST_TIMEOUT;
   let lastError: unknown;
 
   for (const baseUrl of baseUrls) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    const timeout = setTimeout(() => controller.abort(), requestTimeout);
     const startedAt = Date.now();
     const url = buildUrl(baseUrl, path);
 
@@ -140,7 +142,7 @@ async function requestJson<T extends object>(
       path,
       url,
       payloadLength: payload.length,
-      timeoutMs: REQUEST_TIMEOUT,
+      timeoutMs: requestTimeout,
       hasAuthToken: Boolean(API_AUTH_TOKEN),
     });
 
@@ -214,6 +216,7 @@ export async function fetchRecipeDetail(params: {
   mainIngredients: string[];
   seasonings?: string[];
   availableIngredients: string[];
+  detailStage?: 'full' | 'ingredients' | 'steps';
 }) {
   return requestJson<DetailResponse>('/api/detail', params);
 }
@@ -223,5 +226,5 @@ export async function recognizeIngredients(image: string) {
     imageLength: image.length,
   });
 
-  return requestJson<VisionResponse>('/api/vision', { image });
+  return requestJson<VisionResponse>('/api/vision', { image }, { timeoutMs: VISION_REQUEST_TIMEOUT });
 }
