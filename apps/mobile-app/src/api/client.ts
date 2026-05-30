@@ -2,7 +2,7 @@ import type { RecipeRecommendation, RecipeStep, RecommendationContext } from '@/
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const PRODUCTION_API_BASE_URL = 'https://cooking-ideas.vercel.app';
+const PRODUCTION_API_BASE_URL = 'https://api.potinspire.cn';
 const LOCAL_API_PORT = 3000;
 const REQUEST_TIMEOUT = 30000;
 const VISION_REQUEST_TIMEOUT = 15000;
